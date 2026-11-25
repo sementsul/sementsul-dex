@@ -85,6 +85,7 @@ const CONTRACTS = [
   // Поэтому любую пару можно верифицировать как contracts/SementsulV2.sol:SementsulPair.
   // Адреса подтягиваются из фабрики ниже, в pairContracts().
   ...(await pairContracts()),
+  ...(await v3PoolContracts()),
 ]
 
 async function post(params) {
@@ -158,6 +159,53 @@ async function pairContracts() {
   return pairs
 }
 
+// Пулы V3. Перечисляются так же, как пары V2, но через свой счётчик:
+// allPoolsLength() даёт количество, allPools(i) — адрес.
+//
+// Конструктор без аргументов: пул создаётся через create2 и получает токены,
+// комиссию и шаг тика вызовом initialize. Соль включает комиссию, поэтому
+// пулы разных тиров одной пары — разные адреса.
+async function v3PoolContracts() {
+  if (!deployments.v3Factory) return []
+
+  const rpc = process.env.BSC_RPC ?? 'https://bsc-rpc.publicnode.com'
+  const client = createPublicClient({ chain: bsc, transport: http(rpc) })
+  const abi = artifacts.SementsulV3Factory.abi
+
+  let count = 0n
+  try {
+    count = await client.readContract({
+      address: deployments.v3Factory,
+      abi,
+      functionName: 'allPoolsLength',
+    })
+  } catch {
+    return []
+  }
+
+  const pools = []
+  for (let i = 0n; i < count; i++) {
+    try {
+      const addr = await client.readContract({
+        address: deployments.v3Factory,
+        abi,
+        functionName: 'allPools',
+        args: [i],
+      })
+      if (!addr || addr === '0x0000000000000000000000000000000000000000') continue
+      pools.push({ name: `SementsulV3Pool#${i}`, artifact: 'SementsulV3Pool', address: addr, ctor: [] })
+    } catch {
+      // Один битый индекс не должен срывать верификацию остальных.
+      continue
+    }
+  }
+
+  if (pools.length) {
+    console.log(`пулов в фабрике V3: ${pools.length}`)
+  }
+  return pools
+}
+
 async function main() {
   console.log('=== верификация на BscScan (Etherscan V2, chainid 56) ===\n')
 
@@ -177,9 +225,10 @@ async function main() {
     // Первый аргумент конструктора у фабрики V3 — массив uint24, второй —
     // массив int24, третий — адрес. Передаём явные типы, а не угадываем их
     // по значениям: массив из BigInt неотличим от массива чисел.
-    // У пары конструктор без аргументов, поэтому типы пустые.
+    // У пар и пулов V3 конструктор без аргументов: и те и другие создаются
+    // фабрикой через create2 и получают параметры отдельным initialize.
     const ctorTypes =
-      c.artifact === 'SementsulPair'
+      c.artifact === 'SementsulPair' || c.artifact === 'SementsulV3Pool'
         ? []
         : c.name === 'SementsulV3Factory'
         ? ['uint24[]', 'int24[]', 'address']
