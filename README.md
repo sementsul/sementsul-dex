@@ -333,24 +333,51 @@ npm run verify            # всё сразу
 
 ## Индексатор (Worker + D1)
 
+**Адрес API: `https://api.sementsul.net`**
+
 ```bash
 npx wrangler d1 create sementsul-dex
-# полученный database_id вписать в wrangler.toml
+# полученный database_id вписать в wrangler.jsonc
 npx wrangler d1 execute sementsul-dex --file=worker/schema.sql --remote
 npx wrangler deploy
 ```
 
 Эндпоинты:
 
+- `GET /api/health`
 - `GET /api/candles?pair=0x…&interval=1h&limit=200`
 - `GET /api/trades?pair=0x…&limit=50`
 - `GET /api/stats?pair=0x…`
-- `POST /api/backfill?days=30` — первичная индексация
 
-Cron в `wrangler.toml` доиндексирует новые блоки раз в минуту.
+### Привязка к своему домену
 
-`eth_getLogs` на публичной ноде ограничен 40 000 блоков за запрос, поэтому
-индексация идёт чанками по 35 000.
+Воркер живёт на `api.sementsul.net`, а не на служебном
+`*.workers.dev`. Привязка сделана через Workers Domains — Cloudflare сам
+создаёт DNS-запись и выпускает сертификат:
+
+```bash
+curl -X PUT "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/workers/domains" \
+  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"zone_id":"<zone_id>","hostname":"api.sementsul.net","service":"sementsul-dex-api","environment":"production"}'
+```
+
+Одного вызова достаточно: запись `AAAA api` на `100::` (proxied) и сертификат
+Let's Encrypt появляются сами. Отдельно создавать CNAME не нужно — ручная
+запись только конфликтует с привязкой.
+
+### Лимит D1 на бесплатном тарифе
+
+Бесплатный D1 ограничивает число прочитанных строк в сутки. Когда лимит
+исчерпан, `/api/candles` и `/api/trades` отвечают 500 с
+`exceeded D1's free tier daily row read limit`, а интерфейс просто не
+показывает историю — обмен продолжает работать, потому что он не зависит от
+D1. Лимит сбрасывается в полночь UTC.
+
+Причина расхода в том, что запрос свечей читает все сделки пары за всё время
+и группирует их в SQL. Если лимит мешает, варианты по возрастанию затрат:
+сузить окно запроса по `ts`, добавить готовые агрегаты по часам, перейти на
+платный D1.
 
 ## Деплой
 

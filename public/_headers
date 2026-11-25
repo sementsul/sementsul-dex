@@ -3,7 +3,7 @@
 # внутри блока трактуется как заголовок, и файл перестаёт разбираться целиком.
 
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tokens.pancakeswap.finance; connect-src 'self' https://bscrpc.pancakeswap.finance https://bsc-dataseed.bnbchain.org https://bsc-dataseed1.defibit.io https://bsc-dataseed1.ninicoin.io https://bsc-dataseed2.defibit.io https://bsc-rpc.publicnode.com https://api.geckoterminal.com https://sementsul-dex-api.sementsul-maksim.workers.dev; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tokens.pancakeswap.finance; connect-src 'self' https://api.sementsul.net https://bscrpc.pancakeswap.finance https://bsc-dataseed.bnbchain.org https://bsc-dataseed1.defibit.io https://bsc-dataseed1.ninicoin.io https://bsc-dataseed2.defibit.io https://bsc-rpc.publicnode.com https://api.geckoterminal.com; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
