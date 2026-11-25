@@ -14,6 +14,8 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { createPublicClient, http } from 'viem'
+import { bsc } from 'viem/chains'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const dryRun = process.argv.includes('--dry-run')
@@ -78,6 +80,11 @@ const CONTRACTS = [
     address: deployments.token,
     ctor: [deployments.tokenRecipient, deployments.tokenSupply],
   },
+  // Пары создаются фабрикой через create2 из того же байткода, что в
+  // артефактах, и конструктор у них без аргументов (factory = msg.sender).
+  // Поэтому любую пару можно верифицировать как contracts/SementsulV2.sol:SementsulPair.
+  // Адреса подтягиваются из фабрики ниже, в pairContracts().
+  ...(await pairContracts()),
 ]
 
 async function post(params) {
@@ -113,13 +120,51 @@ async function encodeCtor(types, values) {
   return encodeAbiParameters(types.map((t) => ({ type: t })), values.map((v, i) => map(types[i], v)))
 }
 
+// Пары, созданные фабрикой V2.
+//
+// Фабрика хранит их в allPairs и отдаёт по индексу allPairs(i). Читаем до
+// первого отказа, а не по фиксированному списку: владелец может создать
+// новую пару, и скрипт должен её подхватить без правки кода.
+//
+// Аргументов конструктора у пары нет: factory берётся из msg.sender, а
+// токены приходят отдельным вызовом initialize. Поэтому ctor всегда пустой.
+async function pairContracts() {
+  if (!deployments.factory) return []
+
+  const rpc = process.env.BSC_RPC ?? 'https://bsc-rpc.publicnode.com'
+  const client = createPublicClient({ chain: bsc, transport: http(rpc) })
+  const abi = artifacts.SementsulFactory.abi
+
+  const pairs = []
+  for (let i = 0; i < 50; i++) {
+    try {
+      const addr = await client.readContract({
+        address: deployments.factory,
+        abi,
+        functionName: 'allPairs',
+        args: [BigInt(i)],
+      })
+      if (!addr || addr === '0x0000000000000000000000000000000000000000') break
+      pairs.push({ name: `SementsulPair#${i}`, artifact: 'SementsulPair', address: addr, ctor: [] })
+    } catch {
+      // allPairs(i) за пределами массива — это конец списка, не ошибка.
+      break
+    }
+  }
+
+  if (pairs.length) {
+    console.log(`пар в фабрике V2: ${pairs.length}`)
+  }
+  return pairs
+}
+
 async function main() {
   console.log('=== верификация на BscScan (Etherscan V2, chainid 56) ===\n')
 
   const results = []
 
   for (const c of CONTRACTS) {
-    const art = artifacts[c.name]
+    const art = artifacts[c.artifact ?? c.name]
     if (!art) {
       console.log(`${c.name}: НЕТ артефакта, пропуск`)
       continue
@@ -132,8 +177,11 @@ async function main() {
     // Первый аргумент конструктора у фабрики V3 — массив uint24, второй —
     // массив int24, третий — адрес. Передаём явные типы, а не угадываем их
     // по значениям: массив из BigInt неотличим от массива чисел.
+    // У пары конструктор без аргументов, поэтому типы пустые.
     const ctorTypes =
-      c.name === 'SementsulV3Factory'
+      c.artifact === 'SementsulPair'
+        ? []
+        : c.name === 'SementsulV3Factory'
         ? ['uint24[]', 'int24[]', 'address']
         : c.name === 'SementsulFactory'
           ? ['uint24']
@@ -162,7 +210,7 @@ async function main() {
         settings: SETTINGS,
       }),
       codeformat: 'solidity-standard-json-input',
-      contractname: `${art.source}:${c.name}`,
+      contractname: `${art.source}:${c.artifact ?? c.name}`,
       compilerversion: 'v0.8.24+commit.e11b9ed9',
       constructorArguements: ctorArgsHex,
     }
