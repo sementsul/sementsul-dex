@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sementsul-dex-api",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-01-01",
+  "observability": { "enabled": true },
+
+  // ВАЖНО: limits.subrequests и limits.cpu_ms на Free-плане не поддерживаются
+  // (ошибка 100328). Поэтому воркер только читает из D1, а сканирование блоков
+  // живёт в GitHub Actions (scripts/index.mjs) — там нет лимитов CPU.
+  // Cron здесь не нужен: индексатор запускается по расписанию из Actions.
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "sementsul-dex",
+      "database_id": "9c25608b-6141-47be-89de-16e498198606"
+    }
+  ]
+}

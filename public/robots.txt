@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# Служебные эндпоинты индексатора не индексируем
+Disallow: /api/
+
+Sitemap: https://sementsul.net/sitemap.xml

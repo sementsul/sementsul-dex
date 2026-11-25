@@ -1,0 +1,19 @@
+[profile.default]
+src = "contracts"
+out = "foundry-out"
+libs = ["lib"]
+test = "test"
+solc_version = "0.8.24"
+evm_version = "shanghai"
+optimizer = true
+optimizer_runs = 200
+# Контракты самодостаточны: интерфейсы лежат в interfaces.sol, внешних
+# библиотек нет, поэтому remappings не нужны.
+fuzz = { runs = 256 }
+# Инварианты: 32 прогона по 16 вызовов — быстрый режим для npm test.
+# Для серьёзной проверки: FOUNDRY_INVARIANT_RUNS=256 FOUNDRY_INVARIANT_DEPTH=40
+# (10 240 вызовов, около 9 секунд).
+invariant = { runs = 32, depth = 16, fail_on_revert = false }
+
+[fmt]
+line_length = 110

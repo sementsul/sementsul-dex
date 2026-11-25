@@ -1,0 +1,35 @@
+{
+  "name": "sementsul-dex",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Sementsul DEX — собственная биржа на BNB Chain: пулы V2 и V3, роутер, интерфейс",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "verify:calldata": "node verify-calldata.mjs",
+    "verify:logs": "node verify-worker.mjs",
+    "verify:headers": "node verify-headers.mjs",
+    "verify": "npm run verify:headers && npm run verify:calldata && npm run verify:logs",
+    "compile": "node scripts/strip-bom.mjs && node scripts/compile.mjs",
+    "test": "node scripts/test-all.mjs",
+    "test:forge": "forge test",
+    "test:catch": "node scripts/verify-tests-catch-bugs.mjs",
+    "deploy:dry": "node scripts/deploy.mjs --dry-run",
+    "deploy": "node scripts/deploy.mjs",
+    "worker:dev": "wrangler dev",
+    "worker:deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create sementsul-dex",
+    "db:schema": "wrangler d1 execute sementsul-dex --file=worker/schema.sql --remote"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.0"
+  }
+}
