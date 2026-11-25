@@ -1,0 +1,87 @@
+# Автоверификация контрактов и пулов на BscScan.
+#
+# Зачем это нужно отдельным workflow, а не шагом при деплое:
+#
+#   Пулы создаются НЕ при деплое биржи, а когда владелец создаёт пару и
+#   добавляет ликвидность. Фабрика разворачивает пул через create2 в момент
+#   вызова createPair/createPool. Поэтому после деплоя биржи в списке
+#   контрактов появляются новые адреса, и верифицировать их нужно заново.
+#
+#   Скрипт verify.mjs сам обходит allPairs/allPools у фабрик, так что список
+#   адресов здесь не зашит: новый пул подхватится без правки workflow.
+#
+# Когда запускается:
+#   - по расписанию каждый час (пул могли создать в любой момент);
+#   - вручную из вкладки Actions;
+#   - при push в main, но только если менялись контракты или скрипт.
+#
+# Что нужно один раз настроить:
+#   Settings -> Secrets and variables -> Actions -> New repository secret
+#   Имя: ETHERSCAN_API_KEY
+#   Значение: ключ с etherscan.io (тот же, что в .env)
+#
+# Без секрета workflow не упадёт с ошибкой в репозитории: шаг просто
+# пропустится с предупреждением, чтобы форк не выглядел сломанным.
+
+name: verify
+
+on:
+  schedule:
+    # Каждый час. Пулы появляются редко, чаще нет смысла: бесплатный тариф
+    # Etherscan даёт 1 запрос в секунду, и лишние прогоны только жгут лимит.
+    - cron: '17 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'contracts/**'
+      - 'scripts/verify.mjs'
+      - 'src/contracts/artifacts.json'
+      - 'src/contracts/deployments.js'
+      - '.github/workflows/verify.yml'
+
+# Два прогона одновременно не нужны: они будут мешать друг другу запросами
+# к одному и тому же API. Старый прогон отменяем в пользу нового.
+concurrency:
+  group: verify
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Секрет доступен всем шагам job через env. Ссылка secrets.* напрямую в
+    # условии шага не работает — GitHub не разрешает читать секреты в if.
+    env:
+      ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # --omit=dev: для верификации нужен только viem, он в dependencies.
+      # Тесты и сборка здесь не запускаются, поэтому devDependencies не нужны.
+      - name: Установить зависимости
+        run: npm ci --omit=dev
+
+      # Проверку артефактов через compile.mjs здесь НЕ запускаем: он требует solc,
+# которого нет в зависимостях проекта (скрипт берёт его из внешней папки).
+# Артефакты коммитятся вместе с исходниками, а расхождение всё равно поймает
+# сама верификация: Etherscan сравнит байткод и откажет.
+
+      # Секрет пробрасываем на уровне job, чтобы его видели и if, и шаги.
+      # Прямая ссылка secrets.* внутри if шага не работает: GitHub не даёт
+      # читать секреты в выражениях условий.
+      - name: Верифицировать неверифицированное
+        if: env.ETHERSCAN_API_KEY != ''
+        run: node scripts/verify.mjs --only-unverified
+
+      - name: Предупредить об отсутствии секрета
+        if: env.ETHERSCAN_API_KEY == ''
+        run: |
+          echo "::warning::Секрет ETHERSCAN_API_KEY не задан — верификация пропущена."
+          echo "Добавьте его в Settings -> Secrets and variables -> Actions."

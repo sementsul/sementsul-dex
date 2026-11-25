@@ -19,6 +19,11 @@ import { bsc } from 'viem/chains'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const dryRun = process.argv.includes('--dry-run')
+// В автозапуске (GitHub Actions) незачем каждый раз переспрашивать BscScan про
+// контракты, которые уже верифицированы: это лишние запросы к бесплатному
+// тарифу, где действует лимит 1 запрос в секунду. Флаг проверяет статус
+// заранее и отправляет только те, что ещё не верифицированы.
+const onlyUnverified = process.argv.includes('--only-unverified')
 
 const API = 'https://api.etherscan.io/v2/api'
 
@@ -265,6 +270,23 @@ async function main() {
     }
 
     console.log(`${c.name}  ${c.address}`)
+
+    // В режиме автозапуска сначала спрашиваем, не верифицирован ли уже.
+    // getSourceCode возвращает пустой SourceCode, если контракт не проверен.
+    if (onlyUnverified && !dryRun) {
+      const chk = await post({
+        module: 'contract',
+        action: 'getsourcecode',
+        chainid: '56',
+        address: c.address,
+      })
+      const src = chk.result?.[0]?.SourceCode ?? ''
+      if (src.length > 100) {
+        console.log('  уже верифицирован')
+        results.push({ name: c.name, status: 'already' })
+        continue
+      }
+    }
     if (dryRun) {
       const kb = Math.round(params.sourceCode.length / 1024)
       console.log(`  [dry-run] исходников ${kb} КБ, аргументы ${ctorArgsHex.length / 2} байт, контракт ${params.contractname}`)
