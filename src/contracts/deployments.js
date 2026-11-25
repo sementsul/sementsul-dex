@@ -36,5 +36,12 @@ export default {
   "tokenName": "Sementsul",
   "tokenDecimals": 18,
   "tokenSupply": "1000000000000000000000000000",
-  "tokenRecipient": "0x1c1E586d5ca9D96A169D47bA98dAB85D11b4DA12"
+  "tokenRecipient": "0x1c1E586d5ca9D96A169D47bA98dAB85D11b4DA12",
+
+  // Первая пара на своей бирже: SEM/WBNB в пуле V2. Создана вручную через
+  // addLiquidity. По ней интерфейс показывает историю сделок вместо чужого
+  // пула Pancake WBNB/USDT, который стоял здесь по умолчанию.
+  "tradesPair": "0x64Dbdff7478fb32A61d8BbA84a29983412FFeb18",
+  "tradesPairLabel": "SEM / WBNB",
+  "tradesPairProtocol": "v2"
 }
