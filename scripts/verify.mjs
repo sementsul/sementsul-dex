@@ -93,12 +93,30 @@ const CONTRACTS = [
   ...(await v3PoolContracts()),
 ]
 
-async function post(params) {
+// Etherscan V2 на бесплатном тарифе режет больше 3 запросов в секунду.
+//
+// Раньше скрипт стрелял запросами подряд, и в CI первые три контракта
+// проходили, а остальные получали «Max calls per sec rate limit reached».
+// Хуже того, workflow при этом завершался успешно: отказ попадал в результат
+// как обычный текст, а не как ошибка. Теперь запросы идут с паузой, а отказ
+// по лимиту повторяется, а не проглатывается.
+const MIN_INTERVAL_MS = 400 // 2.5 запроса в секунду — с запасом от 3/сек
+let lastCallAt = 0
+
+async function throttle() {
+  const wait = MIN_INTERVAL_MS - (Date.now() - lastCallAt)
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+  lastCallAt = Date.now()
+}
+
+async function post(params, attempt = 0) {
   // chainid обязан быть в СТРОКЕ ЗАПРОСА, а не в теле формы.
   //
   // Первая версия отправляла его вместе с остальными полями в теле, и API
   // отвечал «Missing or unsupported chainid parameter»: параметр просто не
   // доходил. Это неочевидно, потому что все остальные поля работают в теле.
+  await throttle()
+
   const { chainid, ...rest } = params
   const url = `${API}?chainid=${chainid ?? 56}`
   const body = new URLSearchParams({ ...rest, apikey: API_KEY })
@@ -107,7 +125,19 @@ async function post(params) {
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body,
   })
-  return await res.json()
+  const json = await res.json()
+
+  // Отказ по лимиту — временный: ждём и повторяем, до трёх раз. Без этого
+  // верификация тихо пропускала часть контрактов.
+  const text = String(json.result ?? json.message ?? '')
+  if (/rate limit/i.test(text) && attempt < 3) {
+    const backoff = 1500 * (attempt + 1)
+    console.log(`  лимит запросов, повтор через ${backoff} мс`)
+    await new Promise((r) => setTimeout(r, backoff))
+    return post(params, attempt + 1)
+  }
+
+  return json
 }
 
 /// ethers/viem-подобных аргументов конструктора здесь нет, а тянуть
@@ -335,7 +365,36 @@ async function main() {
       }
       await new Promise((res) => setTimeout(res, 5000))
     }
-    if (ok) console.log(`  ${r.name}: верифицирован`)
+    if (ok) {
+      console.log(`  ${r.name}: верифицирован`)
+      r.status = 'verified'
+    } else if (r.status !== 'error') {
+      // Отправили, но за отведённое время подтверждения не пришло. Это не
+      // провал верификации, а таймаут ожидания: Etherscan может обрабатывать
+      // дольше. Отмечаем отдельно, чтобы не путать с отказом.
+      console.log(`  ${r.name}: подтверждение не пришло за 2 минуты`)
+      r.status = 'timeout'
+    }
+  }
+
+  // Итог и код выхода.
+  //
+  // Раньше скрипт не возвращал ничего, и прогон с отказами завершался с
+  // кодом 0: CI показывал зелёный успех, хотя часть контрактов не
+  // верифицировалась. Теперь любой отказ — это падение, которое видно.
+  const failed = results.filter((r) => r.status === 'error')
+  const verified = results.filter((r) => r.status === 'verified')
+  const already = results.filter((r) => r.status === 'already')
+
+  console.log('')
+  console.log(`итого: верифицировано ${verified.length}, уже были ${already.length}, отказов ${failed.length}`)
+
+  if (failed.length) {
+    console.log('')
+    for (const f of failed) {
+      console.log(`  ОТКАЗ ${f.name}: ${String(f.msg).slice(0, 200)}`)
+    }
+    process.exit(1)
   }
 }
 
