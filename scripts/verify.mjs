@@ -13,7 +13,7 @@
 
 import { readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const dryRun = process.argv.includes('--dry-run')
@@ -35,12 +35,12 @@ if (!API_KEY) {
 // Адреса берём из записанного деплоя, а не из консоли: так исключена
 // опечатка, из-за которой можно верифицировать чужой контракт.
 const deploymentsSrc = readFileSync(join(ROOT, 'src', 'contracts', 'deployments.js'), 'utf8')
-const json = deploymentsSrc.match(/export default ({[\s\S]*?})\s*$/)?.[1]
-if (!json) {
-  console.error('ошибка: не разобрал deployments.js')
-  process.exit(1)
-}
-const deployments = JSON.parse(json)
+// Импортируем модуль деплоя, а не разбираем его регэкспом.
+//
+// Прежняя версия вырезала объект регуляркой и гоняла через JSON.parse. Это
+// ломалось, как только в файле появлялся комментарий: JSON их не допускает.
+// Импорт работает с настоящим JavaScript и не зависит от форматирования.
+const { default: deployments } = await import(pathToFileURL(join(ROOT, 'src', 'contracts', 'deployments.js')).href)
 
 const artifacts = JSON.parse(readFileSync(join(ROOT, 'src', 'contracts', 'artifacts.json'), 'utf8'))
 
@@ -71,6 +71,13 @@ const CONTRACTS = [
   { name: 'SementsulV3Factory', address: deployments.v3Factory, ctor: [deployments.v3FeeTiers, deployments.v3TickSpacingsForVerify ?? [1, 10, 50, 200], deployments.admin] },
   { name: 'SementsulRouter', address: deployments.router, ctor: [deployments.factory, deployments.wbnb] },
   { name: 'SementsulV3Router', address: deployments.v3Router, ctor: [deployments.v3Factory, deployments.wbnb] },
+  // Токен верифицируется тем же способом. Его может не быть — тогда строка
+  // просто пропускается: биржа работает и без выпущенного SEM.
+  {
+    name: 'SementsulToken',
+    address: deployments.token,
+    ctor: [deployments.tokenRecipient, deployments.tokenSupply],
+  },
 ]
 
 async function post(params) {
@@ -130,7 +137,9 @@ async function main() {
         ? ['uint24[]', 'int24[]', 'address']
         : c.name === 'SementsulFactory'
           ? ['uint24']
-          : ['address', 'address']
+          : c.name === 'SementsulToken'
+            ? ['address', 'uint256']
+            : ['address', 'address']
 
     let ctorArgsHex = ''
     try {

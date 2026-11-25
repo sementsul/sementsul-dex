@@ -26,5 +26,15 @@ export default {
   "v3Factory": "0xd8fbf8047df940a3640f7b853974b7cfa52dc585",
   "router": "0x2069336bd5e70c4f359ff4142a8b072d074cbbe6",
   "v3Router": "0xc2163ed29ecf3eadb6cc253271cc04b98e0ca5f7",
-  "wbnb": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"
+  "wbnb": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+
+  // Тестовый SEM: выпущен отдельно от биржи, чтобы было чем наполнить пул.
+  // У токена нет владельца, нет mint и нет pause — предложение зафиксировано
+  // в конструкторе навсегда.
+  "token": "0xc729a8fdf0591eaa897f786d4234989a2c39ad0a",
+  "tokenSymbol": "SEM",
+  "tokenName": "Sementsul",
+  "tokenDecimals": 18,
+  "tokenSupply": "1000000000000000000000000000",
+  "tokenRecipient": "0x1c1E586d5ca9D96A169D47bA98dAB85D11b4DA12"
 }
