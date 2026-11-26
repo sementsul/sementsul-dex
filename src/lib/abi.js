@@ -85,6 +85,21 @@ export const SEL = {
   allPoolsLength: selector('allPoolsLength()'),
   allPools: selector('allPools(uint256)'),
   getPoolCount: selector('allPoolsLength()'),
+
+  // ---------- СВОЙ V3-роутер ----------
+  // У нашего SementsulV3Router struct ExactInputParams состоит из ЧЕТЫРЁХ
+  // полей (bytes path, recipient, amountIn, amountOutMinimum), а не из восьми,
+  // как у Pancake/Uniswap, и маршрут упакован в path одной строкой.
+  // Селекторы получаются разные (0xea7ec9c4 против 0x414bf389), поэтому
+  // отправка «унисвопной» calldata в наш роутер падает на селекторе.
+  // Проверено вызовом: 4-польная форма проходит, 8-польная откатывается.
+  exactInputSingleOwn: selector('exactInputSingle((bytes,address,uint256,uint256),uint256)'),
+  exactInputOwn: selector('exactInput((bytes,address,uint256,uint256),uint256)'),
+  exactOutputSingleOwn: selector('exactOutputSingle((bytes,address,uint256,uint256),uint256)'),
+  exactOutputOwn: selector('exactOutput((bytes,address,uint256,uint256),uint256)'),
+  refundBNB: selector('refundBNB()'),
+  unwrapWBNB: selector('unwrapWBNB(uint256,address)'),
+  wrapBNB: selector('wrapBNB(uint256)'),
 }
 
 export function pad32(hex) {

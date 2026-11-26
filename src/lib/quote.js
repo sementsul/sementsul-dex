@@ -348,42 +348,38 @@ export function buildSwapTx({ route, tokenIn, tokenOut, recipient, slippageBps, 
     const hop = route.hops[0]
     const inTok = toPoolToken(tokenIn)
 
-    // Нативный BNB на входе V3-роутер не принимает напрямую:
-    // нужен multicall([exactInputSingle, refundETH]) c value, WBNB заворачивается сам.
+    // Нативный BNB на входе наш V3-роутер обслужить не может.
+    //
+    // Почему: роутер списывает вход через transferFrom(payer, pool, owed), где
+    // payer = msg.sender. Внутри multicall (delegatecall) msg.sender — это
+    // пользователь, а не роутер. Значит роутер попытается списать WBNB с
+    // пользователя, хотя тот прислал BNB и WBNB у него нет. wrapBNB кладёт
+    // WBNB на баланс роутера, но обмен его оттуда не берёт.
+    //
+    // Проверено вызовом: с выданным approve на WBNB тот же calldata проходит,
+    // без него — откат. То есть дело именно в плательщике.
+    //
+    // Чинится только правкой контракта (платить с address(this), когда вход
+    // был нативным), а это передеплой роутера и смена адреса. Пока честнее
+    // вернуть ошибку, чем отправить заведомо падающую транзакцию.
     if (nativeIn) {
-      const inner =
-        SEL.exactInputSingle +
-        encAddress(WBNB) +
-        encAddress(toPoolToken(tokenOut)) +
-        encUint(hop.fee) +
-        encAddress(recipient) +
-        encUint(deadline) +
-        encUint(amountIn) +
-        encUint(minOut) +
-        encUint(0n)
-      const refund = SEL.refundETH
-      return {
-        to: V3_ROUTER,
-        data: multicallData([inner, refund]),
-        value: amountIn,
-        kind: 'v3-native-in',
-        fee: hop.fee,
-      }
+      throw new Error(
+        'Обмен BNB через пул V3 пока недоступен: роутер списывает WBNB с вашего адреса, ' +
+          'а не берёт завернутый BNB со своего. Обменяйте BNB на WBNB в пуле V2 и торгуйте WBNB.'
+      )
     }
 
-    // Нативный BNB на выходе: своп в WBNB на адрес роутера, затем unwrapWETH9.
+    // Нативный BNB на выходе: своп в WBNB на адрес роутера, затем unwrapWBNB.
     if (nativeOut) {
-      const inner =
-        SEL.exactInputSingle +
-        encAddress(inTok) +
-        encAddress(WBNB) +
-        encUint(hop.fee) +
-        encAddress(ADDRESS_THIS) +
-        encUint(deadline) +
-        encUint(amountIn) +
-        encUint(minOut) +
-        encUint(0n)
-      const unwrap = SEL.unwrapWETH9 + encUint(minOut) + encAddress(recipient)
+      const pathHex = encodeV3Path([inTok, WBNB], [hop.fee])
+      const inner = encodeExactInputSingleOwn({
+        pathHex,
+        recipient: ADDRESS_THIS,
+        amountIn,
+        minOut,
+        deadline,
+      })
+      const unwrap = SEL.unwrapWBNB + encUint(minOut) + encAddress(recipient)
       return {
         to: V3_ROUTER,
         data: multicallData([inner, unwrap]),
@@ -393,16 +389,14 @@ export function buildSwapTx({ route, tokenIn, tokenOut, recipient, slippageBps, 
       }
     }
 
-    const data =
-      SEL.exactInputSingle +
-      encAddress(inTok) +
-      encAddress(toPoolToken(tokenOut)) +
-      encUint(hop.fee) +
-      encAddress(recipient) +
-      encUint(deadline) +
-      encUint(amountIn) +
-      encUint(minOut) +
-      encUint(0n)
+    const pathHex = encodeV3Path([inTok, toPoolToken(tokenOut)], [hop.fee])
+    const data = encodeExactInputSingleOwn({
+      pathHex,
+      recipient,
+      amountIn,
+      minOut,
+      deadline,
+    })
     return { to: V3_ROUTER, data, value: 0n, kind: 'v3-single', fee: hop.fee }
   }
 
@@ -444,6 +438,63 @@ function encodeAddressArray(addresses) {
   let out = encUint(addresses.length)
   for (const a of addresses) out += encAddress(a)
   return out
+}
+
+// ---------- кодирование вызовов своего V3-роутера ----------
+//
+// У SementsulV3Router маршрут упакован в один bytes path:
+//   token(20) + fee(3) + token(20) + [fee(3) + token(20)]...
+// Это отличается от Pancake/Uniswap, где struct ExactInputParams состоит из
+// восьми полей по отдельности. Отправлять «унисвопную» calldata нельзя:
+// селектор другой, вызов падает.
+export function encodeV3Path(tokens, fees) {
+  let out = ''
+  for (let i = 0; i < tokens.length; i++) {
+    out += tokens[i].toLowerCase().replace(/^0x/, '')
+    if (i < fees.length) out += Number(fees[i]).toString(16).padStart(6, '0')
+  }
+  return out
+}
+
+// exactInputSingle(ExactInputParams, deadline), где
+// ExactInputParams = (bytes path, address recipient, uint256 amountIn, uint256 amountOutMinimum).
+//
+// Голова: [0x20 смещение на tuple][deadline]
+// Внутри tuple: [смещение path][recipient][amountIn][minOut][длина path][path]
+function encodeExactInputSingleOwn({ pathHex, recipient, amountIn, minOut, deadline }) {
+  const pathBytes = pathHex.replace(/^0x/, '')
+  const pathPadded = pathBytes.padEnd(Math.ceil(pathBytes.length / 64) * 64, '0')
+
+  // Tuple начинается после двух слов головы (смещение на tuple + deadline).
+  // Внутри tuple четыре статических поля по 32 байта, значит path лежит
+  // на смещении 4*32 = 128 от начала tuple.
+  const tuple =
+    encUint(0x80) + // смещение на path внутри tuple
+    encAddress(recipient) +
+    encUint(amountIn) +
+    encUint(minOut) +
+    encUint(pathBytes.length / 2) + // длина path в байтах
+    pathPadded
+
+  return SEL.exactInputSingleOwn + encUint(0x40) + encUint(deadline) + tuple
+}
+
+function encodeExactInputOwn({ pathHex, recipient, amountIn, minOut, deadline }) {
+  // exactInput принимает ту же структуру, поэтому раскладка совпадает.
+  // Смещение на tuple — 0x40, потому что в голове два слова (смещение и
+  // deadline), а tuple лежит сразу за ними.
+  const pathBytes = pathHex.replace(/^0x/, '')
+  return (
+    SEL.exactInputOwn +
+    encUint(0x40) +
+    encUint(deadline) +
+    encUint(0x80) +
+    encAddress(recipient) +
+    encUint(amountIn) +
+    encUint(minOut) +
+    encUint(pathBytes.length / 2) +
+    pathBytes.padEnd(Math.ceil(pathBytes.length / 64) * 64, '0')
+  )
 }
 
 export async function spotPrice(tokenIn, tokenOut, decimalsIn = 18, decimalsOut = 18) {
