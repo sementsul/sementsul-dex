@@ -228,11 +228,79 @@ async function main() {
 
   // Округляем вниз: контракт спишет точные суммы по формуле, и если L
   // окажется чуть больше, чем покрывает баланс, mint упадёт.
-  const Lfinal = BigInt(Math.floor(L * 1e18) - 1)
+  let Lfinal = BigInt(Math.floor(L * 1e18) - 1)
   if (Lfinal <= 0n) {
     console.error('\nслишком мала сумма позиции')
     process.exit(1)
   }
+
+  // Проверяем L симуляцией и при отказе уменьшаем.
+  //
+  // Это не перестраховка, а необходимость: L считается в double, а double
+  // хранит 53 бита — примерно 9e15. Ликвидность V3 на 18 знаках легко
+  // превышает 4e20, и последние разряды теряются. Контракт же считает суммы
+  // в целых с округлением ВВЕРХ, поэтому просит на несколько wei больше
+  // allowance, и transferFrom откатывает всю транзакцию.
+  //
+  // Шаг 0.1% от суммы: на порядки больше любого расхождения округления, но
+  // на стоимость позиции влияет в пределах цента.
+  const mintAbi = [
+    {
+      type: 'function',
+      name: 'mint',
+      stateMutability: 'nonpayable',
+      inputs: [
+        { name: 'recipient', type: 'address' },
+        { name: 'tickLower', type: 'int24' },
+        { name: 'tickUpper', type: 'int24' },
+        { name: 'amount', type: 'uint128' },
+      ],
+      outputs: [
+        { name: 'amount0', type: 'uint256' },
+        { name: 'amount1', type: 'uint256' },
+      ],
+    },
+  ]
+
+  let simulated = null
+  for (let i = 0; i < 60; i++) {
+    const candidate = (Lfinal * BigInt(1000 - i)) / 1000n
+    if (candidate <= 0n) break
+    try {
+      const data = (await import('viem')).encodeFunctionData({
+        abi: mintAbi,
+        functionName: 'mint',
+        args: [account.address, tickLower, tickUpper, candidate],
+      })
+      const res = await read.call({ to: pool, data, account: account.address })
+      const amount0 = BigInt('0x' + res.data.slice(2, 66))
+      const amount1 = BigInt('0x' + res.data.slice(66, 130))
+      simulated = { L: candidate, amount0, amount1, steps: i }
+      break
+    } catch {
+      // этот вариант не проходит — пробуем меньше
+    }
+  }
+
+  if (!simulated) {
+    console.error('')
+    console.error('ОСТАНОВКА: не удалось подобрать ликвидность, которую пул примет.')
+    console.error('Проверьте allowance и балансы — возможно, их не хватает.')
+    process.exit(1)
+  }
+
+  if (simulated.steps > 0) {
+    console.log('')
+    console.log(`(ликвидность уменьшена на ${(simulated.steps * 0.1).toFixed(1)}% из-за округления)`)
+  }
+
+  console.log('')
+  console.log('=== пул спишет ===')
+  console.log(`  USDT: ${formatUnits(simulated.amount0, 18)}`)
+  console.log(`  WBNB: ${formatUnits(simulated.amount1, 18)}`)
+  console.log(`  ликвидность L: ${simulated.L}`)
+
+  Lfinal = simulated.L
 
   if (dryRun) {
     console.log('\n--dry-run: транзакции не отправлены')

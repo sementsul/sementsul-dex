@@ -10,11 +10,11 @@ import {
   readV3Position,
 } from '../lib/liquidity.js'
 import { readBalanceOf, readAllowance } from '../lib/pools.js'
-import { parseAmount, formatAmount, formatUsd, shortAddress } from '../lib/format.js'
+import { parseAmount, formatAmount, formatUsd } from '../lib/format.js'
 import { sendTransaction, waitForReceipt } from '../lib/wallet.js'
 import { V2_ROUTER } from '../lib/chain.js'
 import { SEL, encAddress, encUint } from '../lib/abi.js'
-import { TokenIcon, Notice, Spinner } from './ui.jsx'
+import { TokenIcon, Notice, Spinner, CopyAddress } from './ui.jsx'
 
 const MAX_UINT256 = (1n << 256n) - 1n
 
@@ -48,7 +48,7 @@ export function LiquidityPanel({ pool, wallet, onBack, onDone }) {
           <div className="pool-hero-meta">
             <span className={isV3 ? 'badge v3' : 'badge'}>{isV3 ? 'V3' : 'V2'}</span>
             {isV3 && <span className="dim mono">{(pool.fee / 10000).toFixed(2)}%</span>}
-            <span className="dim mono">{shortAddress(pool.address, 6)}</span>
+            <CopyAddress address={pool.address} chars={6} />
           </div>
         </div>
         <div className="pool-hero-tvl">

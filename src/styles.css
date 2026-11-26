@@ -1039,6 +1039,16 @@ a:hover {
   text-align: left;
   font-size: 13px;
   transition: background 0.12s;
+  /* Строка — div с role="button" (внутрь надо было вложить копирование
+     адреса, а button в button браузер не разрешает), поэтому курсор и
+     выделение задаём явно. */
+  cursor: pointer;
+  user-select: none;
+}
+
+.pool-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .pool-row:last-child {
@@ -1090,6 +1100,64 @@ a:hover {
 
 .pool-addr {
   color: var(--text-faint);
+  font-size: 11px;
+}
+
+/* ---------- копирование адреса ---------- */
+
+/* Адрес контракта с копированием. Раньше адрес был просто текстом, и
+   скопировать его было нельзя — приходилось набирать вручную, а адрес
+   контракта вручную не набирают без ошибок. */
+.copy-addr {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  margin: -2px 0;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.copy-addr:hover {
+  background: var(--bg-elev-2);
+  border-color: var(--border-soft);
+  color: var(--text);
+}
+
+.copy-addr:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.copy-addr.ok {
+  color: var(--green);
+  border-color: var(--green);
+}
+
+.copy-addr.bad {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.copy-icon {
+  opacity: 0.55;
+  font-size: 11px;
+}
+
+.copy-addr:hover .copy-icon,
+.copy-addr.ok .copy-icon {
+  opacity: 1;
+}
+
+/* В строке пула копирование не должно перехватывать клик по всей строке:
+   клик по самому адресу копирует, клик рядом — открывает пул. */
+.copy-addr.in-row {
   font-size: 11px;
 }
 

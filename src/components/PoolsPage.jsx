@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { loadPools, isEmptyPool, clearPriceCache } from '../lib/liquidity.js'
 import { HAS_OWN_DEX } from '../lib/chain.js'
-import { formatUsd, formatAmount, shortAddress } from '../lib/format.js'
-import { TokenIcon, Spinner, Notice } from './ui.jsx'
+import { formatUsd, formatAmount } from '../lib/format.js'
+import { TokenIcon, Spinner, Notice, CopyAddress } from './ui.jsx'
 import CreatePool from './CreatePool.jsx'
 import { LiquidityPanel } from './LiquidityPanel.jsx'
 
@@ -179,7 +179,22 @@ function PoolRow({ pool, onSelect }) {
   const empty = isEmptyPool(pool)
 
   return (
-    <button className="pool-row" onClick={onSelect}>
+    // Раньше здесь был <button>. Кнопку копирования внутрь неё вложить нельзя:
+    // браузер не разрешает button внутри button, а клик по вложенной всплывал
+    // бы и переключал пул вместо копирования. Поэтому строка — div с
+    // role="button": поведение то же, а внутри можно разместить копирование.
+    <div
+      className="pool-row"
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect()
+        }
+      }}
+    >
       <span className="pool-pair">
         <span className="pool-icons">
           <TokenIcon token={pool.token0} size={22} />
@@ -192,7 +207,7 @@ function PoolRow({ pool, onSelect }) {
           <span className="pool-meta">
             <span className={isV3 ? 'badge v3' : 'badge'}>{isV3 ? 'V3' : 'V2'}</span>
             {empty && <span className="badge empty">пусто</span>}
-            <span className="mono pool-addr">{shortAddress(pool.address, 4)}</span>
+            <CopyAddress address={pool.address} chars={4} className="in-row" />
           </span>
         </span>
       </span>
@@ -200,6 +215,6 @@ function PoolRow({ pool, onSelect }) {
       <span className="right mono dim">{reserves}</span>
       <span className="right mono">{feePct === null ? '—' : `${feePct}%`}</span>
       <span className="pool-chevron">›</span>
-    </button>
+    </div>
   )
 }

@@ -184,3 +184,78 @@ export function Spinner({ light }) {
 export function Notice({ kind = 'info', children }) {
   return <div className={`notice ${kind}`}>{children}</div>
 }
+
+// Копирование адреса контракта в буфер обмена.
+//
+// Раньше адрес показывался сокращённым (0x1234...abcd) и скопировать его было
+// нельзя вообще: строка пула — это <button>, и вложенная кнопка «копировать»
+// внутри неё не работает (браузер не даёт вкладывать button в button, а клик
+// внутри всплывает и переключает пул). Поэтому копирование вынесено отдельным
+// элементом рядом с адресом, а полный адрес показывается в подсказке.
+//
+// navigator.clipboard доступен только в защищённом контексте (https или
+// localhost). На http он есть в объекте, но writeText отклоняется — поэтому
+// предусмотрен запасной путь через скрытое поле и execCommand.
+export function CopyAddress({ address, chars = 4, label, className = '' }) {
+  const [copied, setCopied] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    if (!copied) return undefined
+    // Возвращаем подпись обратно: иначе «скопировано» висит вечно и перестаёт
+    // что-либо сообщать.
+    const t = setTimeout(() => setCopied(false), 1400)
+    return () => clearTimeout(t)
+  }, [copied])
+
+  async function copy(e) {
+    e.preventDefault()
+    e.stopPropagation()
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(address)
+      } else {
+        throw new Error('нет clipboard api')
+      }
+    } catch {
+      // Запасной путь: старый способ через выделение скрытого поля.
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = address
+        // За пределами экрана, иначе страница дёрнется при фокусе.
+        ta.style.position = 'fixed'
+        ta.style.top = '-1000px'
+        ta.setAttribute('readonly', '')
+        document.body.appendChild(ta)
+        ta.select()
+        const ok = document.execCommand('copy')
+        document.body.removeChild(ta)
+        if (!ok) throw new Error('execCommand отказал')
+      } catch {
+        setFailed(true)
+        setTimeout(() => setFailed(false), 2000)
+        return
+      }
+    }
+    setCopied(true)
+  }
+
+  const short = `${address.slice(0, chars + 2)}...${address.slice(-chars)}`
+  const text = copied ? 'скопировано' : failed ? 'не удалось' : label ?? short
+
+  return (
+    <button
+      type="button"
+      className={`copy-addr ${copied ? 'ok' : ''} ${failed ? 'bad' : ''} ${className}`}
+      onClick={copy}
+      title={copied ? 'адрес в буфере' : `скопировать ${address}`}
+      aria-label={`скопировать адрес ${address}`}
+    >
+      <span className="mono">{text}</span>
+      <span className="copy-icon" aria-hidden="true">
+        {copied ? '✓' : failed ? '×' : '⧉'}
+      </span>
+    </button>
+  )
+}
