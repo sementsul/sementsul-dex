@@ -35,14 +35,19 @@
 ## 1. Что такое наш пул
 
 ```
-Адрес:        0x3688726E5811E766A0cA014dCEC24622c0d02583
+Адрес:        0x37c7702B589c69D1e4f4ad32E19f372ED6780278
 token0:       USDT   0x55d398326f99059fF775485246999027B3197955
 token1:       WBNB   0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c
 fee:          500  (0.05%)
 tickSpacing:  10
-Фабрика:      0xd8Fbf8047dF940a3640F7b853974B7CFa52dC585
-Роутер V3:    0xc2163ed29ecF3Eadb6cc253271cC04b98e0ca5f7
+Фабрика:      0xc0b597bee57bba0aae2ce9e73e83217331a24dd9
+Роутер V3:    0xf98b7f4effb34dae1f785010ecf71ff796e7fdd1
 ```
+
+Пул и фабрика пересозданы 2026-11-26: в прежнем пуле
+`0x3688726E…` был дефект, запирающий первую позицию в новом диапазоне тиков
+(см. [POOL-STUCK-POSITION-BUG.md](./POOL-STUCK-POSITION-BUG.md)). Если вы
+видели этот документ раньше — адреса в нём были другие, берите эти.
 
 ### Порядок токенов совпадает с текущим пулом бота
 
@@ -494,9 +499,9 @@ node scripts/verify-bot-doc.mjs
 
 ## 9. Ссылки
 
-- Пул: https://bscscan.com/address/0x3688726E5811E766A0cA014dCEC24622c0d02583
-- Фабрика: https://bscscan.com/address/0xd8Fbf8047dF940a3640F7b853974B7CFa52dC585
-- Роутер: https://bscscan.com/address/0xc2163ed29ecF3Eadb6cc253271cC04b98e0ca5f7
+- Пул: https://bscscan.com/address/0x37c7702B589c69D1e4f4ad32E19f372ED6780278
+- Фабрика: https://bscscan.com/address/0xc0b597bee57bba0aae2ce9e73e83217331a24dd9
+- Роутер: https://bscscan.com/address/0xf98b7f4effb34dae1f785010ecf71ff796e7fdd1
 - Исходники: `sementsul-dex/contracts/SementsulV3.sol`, `SementsulV3Router.sol`
 - Исходники на GitHub: https://github.com/sementsul/sementsul-dex
 - ABI: `sementsul-dex/src/contracts/artifacts.json`
