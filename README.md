@@ -1,4 +1,4 @@
-# Sementsul DEX
+﻿# Sementsul DEX
 
 Собственная биржа на BNB Smart Chain: пулы V2 и V3, свои фабрики, свои
 роутеры. Расчёт маршрута и цены выполняется **в браузере**, транзакции
@@ -246,7 +246,7 @@ V3, через них проходят обмены в обе стороны, л
 
 ```bash
 npm run compile        # solc + артефакты в src/contracts/artifacts.json
-npm test               # все наборы: 725 проверок + 75 тестов Foundry
+npm test               # все наборы: 743 проверки + 75 тестов Foundry
 npm run deploy:dry     # показать, что будет отправлено, без трат BNB
 DEPLOYER_KEY=0x... npm run deploy
 ```

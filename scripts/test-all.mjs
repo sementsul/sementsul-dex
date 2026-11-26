@@ -23,6 +23,7 @@ const SUITES = [
   ['токен SEM в пулах V2 и V3', 'test-token-dex.mjs'],
   ['подпись и калибровка деплоя', 'test-deploy-signing.mjs'],
   ['газ транзакций (потолок RPC)', 'test-gas.mjs'],
+  ['разбор Swap-событий', 'test-swap-parsing.mjs'],
   ['база знаний и форматирование', 'test-knowledge.mjs'],
 ]
 

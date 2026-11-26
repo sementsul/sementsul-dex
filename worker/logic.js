@@ -8,9 +8,18 @@
 export const TOPIC_SWAP_V2 =
   '0xd78ad95fa46c994b6551d0da85fc275fe613ce37657fb8d5e3d130840159d822'
 
-// topic0 события Swap у PancakeV3Pool
+// topic0 события Swap у SementsulV3Pool.
+//
+// Сигнатура — Swap(address indexed sender, address indexed recipient,
+// int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity,
+// int24 tick). Это НЕ та сигнатура, что у Pancake V3: там first argument
+// один (sender), здесь их два (sender и recipient), поэтому topic0 другой.
+//
+// Раньше здесь стоял 0x19b47279… — хеш сигнатуры Pancake. Наш пул его не
+// эмитит никогда, поэтому индексатор молча не находил ни одного свопа и
+// история по нашему пулу оставалась пустой.
 export const TOPIC_SWAP_V3 =
-  '0x19b47279256b2a23a1665c810c8d55a1758940ee09377d4f8d26497a3577dc83'
+  '0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67'
 
 function words(data) {
   const s = data.slice(2)
@@ -83,7 +92,12 @@ export function parseSwapV2(log) {
   }
 }
 
-// V3 Swap: amount0, amount1, sqrtPriceX96, liquidity, tick
+// V3 Swap: amount0, amount1, sqrtPriceX96, liquidity, tick.
+//
+// amount0 и amount1 — int256 со знаком и даны со стороны пула: плюс означает,
+// что пул получил токен (это вход), минус — что отдал (это выход). Поэтому
+// объём берётся из тех же полей, а не из нулей: раньше здесь стояли
+// amountIn: 0n и amountOut: 0n, и любой объём по V3-пулу выходил нулевым.
 export function parseSwapV3(log) {
   // См. комментарий в parseSwapV2: фильтруем по topic0 здесь, потому что
   // не каждый RPC умеет фильтровать по темам.
@@ -95,18 +109,49 @@ export function parseSwapV3(log) {
   const amount0 = BigInt('0x' + w[0])
   const amount1 = BigInt('0x' + w[1])
   const sqrtPriceX96 = BigInt('0x' + w[2])
-  const tick = Number(BigInt('0x' + w[4]))
 
-  // amount0/amount1 — int256 со знаком; для направления смотрим на amount0.
-  const negative0 = amount0 >= 1n << 255n
-  const zeroForOne = !negative0 && amount0 > 0n
+  // tick — это int24, и в ABI он дополнен знаком до полного слова. Поэтому
+  // положительный тик читается как есть, а отрицательный выглядит как
+  // 0xffff…f0e2. Без обратного перевода сюда попадало 1.15e+77 вместо,
+  // например, -63204, и по такому тику нельзя построить ни диапазон позиции,
+  // ни проверку цены.
+  const rawTick = BigInt('0x' + w[4])
+  const tick = Number(rawTick >= 1n << 255n ? rawTick - (1n << 256n) : rawTick)
+
+  // Знак в int256: старший бит выставлен — число отрицательное.
+  const neg0 = amount0 >= 1n << 255n
+  const neg1 = amount1 >= 1n << 255n
+
+  const abs = (v) => (v >= 1n << 255n ? (1n << 256n) - v : v)
+
+  // В обычном свопе один токен приходит в пул, а другой уходит: знаки разные.
+  // Если оба одного знака, это не обмен — такие записи не должны попадать ни
+  // в цену, ни в объём, иначе график и статистика поедут.
+  if (neg0 === neg1) {
+    return {
+      protocol: 'v3',
+      kind: 'flash',
+      zeroForOne: !neg0 && amount0 > 0n,
+      amountIn: 0n,
+      amountOut: 0n,
+      sqrtPriceX96,
+      tick,
+      price: 0n,
+    }
+  }
+
+  // zeroForOne: token0 пришёл в пул, значит им платят, а token1 получают.
+  const zeroForOne = !neg0
+
+  const amountIn = zeroForOne ? abs(amount0) : abs(amount1)
+  const amountOut = zeroForOne ? abs(amount1) : abs(amount0)
 
   return {
     protocol: 'v3',
     kind: 'swap',
     zeroForOne,
-    amountIn: 0n,
-    amountOut: 0n,
+    amountIn,
+    amountOut,
     sqrtPriceX96,
     tick,
     // Цена token1 за token0, масштаб 1e18: (sqrtP / 2^96)^2

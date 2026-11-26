@@ -22,9 +22,12 @@
 //   MAX_BLOCKS — потолок блоков за один запуск (по умолчанию 40000)
 //   PAIR      — адрес пары (по умолчанию SML/WBNB)
 
-import { parseSwapV2 } from '../worker/logic.js'
+import { parseSwapV2, parseSwapV3 } from '../worker/logic.js'
 
-const PAIR = process.env.PAIR ?? '0xd5394617f4a0222b7c30a3e46d740969d0acfddc'
+// Пул по умолчанию — свой USDT/WBNB в V3. Раньше здесь стоял чужой пул
+// SML/WBNB, к нашей бирже отношения не имеющий: история по нему накапливалась,
+// но показывать её было негде.
+const PAIR = process.env.PAIR ?? '0x37c7702B589c69D1E4f4ad32E19f372ED6780278'
 const DAYS = Number(process.env.DAYS ?? 7)
 const MAX_BLOCKS = Number(process.env.MAX_BLOCKS ?? 40000)
 
@@ -132,9 +135,17 @@ async function rpcBatch(calls) {
 }
 
 // Логи пары за диапазон. Сначала пробуем eth_getLogs — один запрос на всё,
-// что несравнимо быстрее обхода по блокам. Провайдеры ограничивают диапазон
-// (publicnode — 50 000 блоков), поэтому крупные окна режем на куски.
-const GETLOGS_SPAN = 45000
+// что несравнимо быстрее обхода по блокам. Провайдеры ограничивают диапазон,
+// поэтому крупные окна режем на куски.
+//
+// Лимит у publicnode — 10 000 блоков на запрос, и это проверено: 40 000
+// отвечает «query exceeds max block range 10000», а 50 000 — «exceed maximum
+// block range: 50000». Здесь стояло 45 000 — каждый запрос гарантированно
+// падал, и скрипт молча уходил в обход по receipts, который на 20 000 блоков
+// работает минутами и выглядит как зависание.
+//
+// Берём 9 000, с запасом: лимит может считаться включительно.
+const GETLOGS_SPAN = 9000
 
 async function logsViaGetLogs(fromBlock, toBlock) {
   const out = []
@@ -296,23 +307,30 @@ async function main() {
   // Насколько глубоко провайдер вообще отдаёт историю: за этот предел идти
   // бессмысленно, ответом будет 403.
   const archiveFloor = await findArchiveFloor(head)
-  const deepest = Math.max(archiveFloor, head - DAYS * BLOCKS_PER_DAY)
+
+  // Границы блоков обязаны быть целыми. DAYS можно задать дробным (0.1 дня),
+  // и тогда head - DAYS * BLOCKS_PER_DAY даёт 135791217.6 — такой номер не
+  // существует, и eth_getLogs отвечает «Invalid params». Скрипт после этого
+  // молча уходил в обход по receipts, то есть в минуты ожидания вместо
+  // одного запроса.
+  const deepest = Math.max(Math.floor(archiveFloor), Math.ceil(head - DAYS * BLOCKS_PER_DAY))
   console.log(
     `глубина: запрошено ${DAYS} дн., доступно ${Math.round((head - archiveFloor) / BLOCKS_PER_DAY)} дн.`
   )
 
-  let from
+  let fromRaw
   if (savedBlock && savedBlock > deepest && savedBlock < head) {
-    from = savedBlock + 1 // продолжаем с места остановки
+    fromRaw = savedBlock + 1 // продолжаем с места остановки
   } else if (savedBlock && savedBlock >= head - 5) {
     console.log('новых блоков нет')
     return
   } else {
-    from = deepest // начинаем с самой глубокой доступной точки
+    fromRaw = deepest // начинаем с самой глубокой доступной точки
   }
 
   // Ограничение по объёму за запуск: идём от старых блоков к новым.
-  const to = Math.min(from + MAX_BLOCKS - 1, head)
+  const from = Math.ceil(fromRaw)
+  const to = Math.floor(Math.min(from + MAX_BLOCKS - 1, head))
   console.log(`блоки ${from}..${to} (${to - from + 1}), глубина ${DAYS} дн.`)
   const t0 = Date.now()
 
@@ -321,9 +339,16 @@ async function main() {
 
   // Разбор отсеивает всё, кроме Swap: blockReceipts отдаёт события всех
   // контрактов, а getLogs — только нужного адреса, но и там бывают Sync/Transfer.
+  //
+  // Пулов два типа, и события у них разные: у пары V2 — Swap с четырьмя
+  // суммами в data, у пула V3 — Swap с суммой, ценой и тиком. Пробуем оба
+  // разбора подряд: адрес в PAIR один, поэтому лишнего не найдётся, а
+  // поддерживать два кодовых пути для V2 и V3 не нужно.
+  const parseAny = (log) => parseSwapV2(log) ?? parseSwapV3(log)
+
   const parsed = []
   const blockTimes = new Map()
-  const blockNums = [...new Set(logs.filter((l) => parseSwapV2(l)).map((l) => l.blockNumber))]
+  const blockNums = [...new Set(logs.filter((l) => parseAny(l)).map((l) => l.blockNumber))]
 
   for (let i = 0; i < blockNums.length; i += BATCH) {
     const slice = blockNums.slice(i, i + BATCH)
@@ -336,7 +361,7 @@ async function main() {
   }
 
   for (const log of logs) {
-    const p = parseSwapV2(log)
+    const p = parseAny(log)
     if (!p) continue
     parsed.push([
       log.transactionHash,

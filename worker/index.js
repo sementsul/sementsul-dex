@@ -1,4 +1,4 @@
-// Cloudflare Worker: API индексатора сделок PancakeSwap для SML.
+﻿// Cloudflare Worker: API индексатора сделок PancakeSwap для SML.
 //
 // Что здесь есть и чего нет:
 //
@@ -23,7 +23,12 @@
 
 import { TOPIC_SWAP_V2, TOPIC_SWAP_V3, parseSwapV2, parseSwapV3 } from './logic.js'
 
-const PAIR_SML_WBNB = '0xd5394617f4a0222b7c30a3e46d740969d0acfddc'
+// Пул по умолчанию — свой USDT/WBNB в V3 (0.05%).
+//
+// Раньше здесь стоял чужой пул SML/WBNB. Он не имеет отношения к нашей бирже,
+// поэтому запрос без параметра pair отдавал историю чужого рынка: интерфейс
+// выглядел наполненным, но цифры были не наши.
+const DEFAULT_PAIR = '0x37c7702B589c69D1E4f4ad32E19f372ED6780278'
 
 const CORS = {
   'access-control-allow-origin': '*',
@@ -69,7 +74,7 @@ export default {
 const INTERVALS = { '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400 }
 
 async function handleCandles(url, env) {
-  const pair = url.searchParams.get('pair') ?? PAIR_SML_WBNB
+  const pair = url.searchParams.get('pair') ?? DEFAULT_PAIR
   const interval = url.searchParams.get('interval') ?? '1h'
   const limit = Math.min(Number(url.searchParams.get('limit') ?? 200), 1000)
 
@@ -128,7 +133,7 @@ async function handleCandles(url, env) {
 }
 
 async function handleTrades(url, env) {
-  const pair = url.searchParams.get('pair') ?? PAIR_SML_WBNB
+  const pair = url.searchParams.get('pair') ?? DEFAULT_PAIR
   const limit = Math.min(Number(url.searchParams.get('limit') ?? 20), 200)
 
   const { results } = await env.DB.prepare(
@@ -146,7 +151,7 @@ async function handleTrades(url, env) {
 }
 
 async function handleStats(url, env) {
-  const pair = url.searchParams.get('pair') ?? PAIR_SML_WBNB
+  const pair = url.searchParams.get('pair') ?? DEFAULT_PAIR
 
   const last = await env.DB.prepare(
     `SELECT price, ts FROM trades WHERE pair = ? AND kind = 'swap' ORDER BY block DESC, log_index DESC LIMIT 1`
