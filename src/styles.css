@@ -1527,6 +1527,21 @@ a:hover {
   line-height: 1.7;
 }
 
+/* Адрес контракта в тексте — ссылка на BscScan. Моноширинный шрифт, чтобы
+   символы не путались: в адресе 0 и O, l и 1 выглядят одинаково. */
+.kb-addr {
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.92em;
+  color: var(--accent, #f0b90b);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  border-bottom: 1px dotted currentColor;
+}
+
+.kb-addr:hover {
+  border-bottom-style: solid;
+}
+
 /* ---------- адаптив ---------- */
 
 @media (max-width: 720px) {

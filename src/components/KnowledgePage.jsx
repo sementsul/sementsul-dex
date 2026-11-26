@@ -65,6 +65,35 @@ export default function KnowledgePage() {
   )
 }
 
+// Адрес контракта в тексте статьи превращаем в ссылку на BscScan: читатель
+// должен иметь возможность проверить сказанное, а не перепечатывать 42 символа
+// руками — ошибка в одном знаке ведёт не туда.
+//
+// Разметку держим здесь, а не в knowledge.js: там тексты намеренно остаются
+// простыми строками, их проверяет test-knowledge.mjs, и markdown внутри строк
+// сломал бы и проверки, и поиск по статьям.
+const ADDRESS_RE = /(0x[0-9a-fA-F]{40})/g
+
+function linkify(text) {
+  const parts = text.split(ADDRESS_RE)
+  // split с группой кладёт совпадения на нечётные позиции
+  return parts.map((part, i) =>
+    i % 2 === 1 ? (
+      <a
+        key={i}
+        className="kb-addr"
+        href={`https://bscscan.com/address/${part}`}
+        target="_blank"
+        rel="noreferrer"
+      >
+        {part}
+      </a>
+    ) : (
+      part
+    )
+  )
+}
+
 function Article({ article, onBack }) {
   return (
     <div className="page">
@@ -88,7 +117,7 @@ function Article({ article, onBack }) {
           <section key={i}>
             <h2>{section.h}</h2>
             {section.p.map((text, j) => (
-              <p key={j}>{text}</p>
+              <p key={j}>{linkify(text)}</p>
             ))}
           </section>
         ))}

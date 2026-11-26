@@ -14,9 +14,14 @@
 | Контракт | Адрес |
 |---|---|
 | Фабрика V2 | [`0x6f950C2212754f54Cf4e99EBA6c3F699725B89b6`](https://bscscan.com/address/0x6f950C2212754f54Cf4e99EBA6c3F699725B89b6#code) |
-| Фабрика V3 | [`0xd8Fbf8047dF940a3640F7b853974B7CFa52dC585`](https://bscscan.com/address/0xd8Fbf8047dF940a3640F7b853974B7CFa52dC585#code) |
+| Фабрика V3 | [`0xc0b597bee57bba0aae2ce9e73e83217331a24dd9`](https://bscscan.com/address/0xc0b597bee57bba0aae2ce9e73e83217331a24dd9#code) |
 | Роутер V2 | [`0x2069336bD5E70c4F359Ff4142a8B072D074cbbe6`](https://bscscan.com/address/0x2069336bD5E70c4F359Ff4142a8B072D074cbbe6#code) |
-| Роутер V3 | [`0xc2163ed29ecF3Eadb6cc253271cC04b98e0ca5f7`](https://bscscan.com/address/0xc2163ed29ecF3Eadb6cc253271cC04b98e0ca5f7#code) |
+| Роутер V3 | [`0xf98b7f4effb34dae1f785010ecf71ff796e7fdd1`](https://bscscan.com/address/0xf98b7f4effb34dae1f785010ecf71ff796e7fdd1#code) |
+| Пул USDT/WBNB, V3 0.05% | [`0x37c7702B589c69D1e4f4ad32E19f372ED6780278`](https://bscscan.com/address/0x37c7702B589c69D1e4f4ad32E19f372ED6780278#code) |
+
+Фабрика и роутер V3 пересозданы 2026-11-26: в прежнем пуле USDT/WBNB был
+дефект, запирающий первую позицию в новом диапазоне тиков.
+Подробности — [docs/POOL-STUCK-POSITION-BUG.md](docs/POOL-STUCK-POSITION-BUG.md).
 
 ## Комиссии
 
@@ -180,9 +185,15 @@ Uniswap — индексаторы видят наши пулы без прав�
 событий `Swap` индексером, а не из колец в хранилище. Флеш-займов и
 протокольной доли комиссии тоже нет.
 
-## Токен SEM
+## Токен SEM (снят с биржи)
 
-`SementsulToken` — новый токен Sementsul: `Sementsul`, `SEM`, 18 знаков.
+> **Снят с сайта 2026-11-26.** SEM выпускался как тестовый токен — чтобы было
+> чем наполнить первый пул. Ценности он не представляет и ничем не обеспечен.
+> Из интерфейса убран: его нет в списке токенов, в паре SEM/WBNB и в базе
+> знаний. Контракт на цепи жив и остаётся верифицированным, но биржа его
+> больше не предлагает. Раздел оставлен как описание контракта.
+
+`SementsulToken` — тестовый токен: `Sementsul`, `SEM`, 18 знаков.
 Доверие к нему построено на отсутствии возможностей, а не на обещаниях.
 
 **Чего в контракте нет — и не появится, потому что функции не существует:**
@@ -235,7 +246,7 @@ V3, через них проходят обмены в обе стороны, л
 
 ```bash
 npm run compile        # solc + артефакты в src/contracts/artifacts.json
-npm test               # все наборы: 489 проверок
+npm test               # все наборы: 725 проверок + 75 тестов Foundry
 npm run deploy:dry     # показать, что будет отправлено, без трат BNB
 DEPLOYER_KEY=0x... npm run deploy
 ```

@@ -1,12 +1,14 @@
 // Блок «Последние сделки» под карточкой обмена.
 //
-// Данные берутся из воркера-индексатора. Если он недоступен, блок просто не
-// рендерится: история — приятное дополнение, а не условие работы обмена.
+// Показываем только сделки нашего пула. Если пула нет, индексатор недоступен
+// или сделок не было — блок не рендерится вовсе. Это осознанно: раньше здесь
+// вперемешку шли чужие сделки Pancake с ценой, подписанной «BNB», хотя это
+// USDT за WBNB. Лучше не показать ничего, чем показать не то.
 
 import { useEffect, useState } from 'react'
 import { fetchRecentTrades, isIndexerAvailable } from '../lib/indexer.js'
-import { TRADES_PAIR, TRADES_PAIR_LABEL } from '../lib/chain.js'
-import { formatAmount, formatPrice } from '../lib/format.js'
+import { TRADES_POOL, TRADES_PAIR_LABEL } from '../lib/chain.js'
+import { formatPrice } from '../lib/format.js'
 
 function timeAgo(unixSec) {
   const diff = Math.floor(Date.now() / 1000) - unixSec
@@ -20,6 +22,12 @@ export default function RecentTrades() {
   const [state, setState] = useState({ status: 'loading', trades: [], error: null })
 
   useEffect(() => {
+    // Своего пула нет — показывать нечего и незачем.
+    if (!TRADES_POOL) {
+      setState({ status: 'unavailable', trades: [], error: null })
+      return
+    }
+
     let alive = true
 
     const load = async () => {
@@ -30,7 +38,7 @@ export default function RecentTrades() {
         return
       }
       try {
-        const trades = await fetchRecentTrades(TRADES_PAIR, 6)
+        const trades = await fetchRecentTrades(TRADES_POOL, 6)
         if (!alive) return
         setState({ status: 'ready', trades, error: null })
       } catch (e) {
@@ -48,8 +56,12 @@ export default function RecentTrades() {
     }
   }, [])
 
-  // Воркера нет — не занимаем место на экране.
+  // Нет воркера или нет пула — не занимаем место на экране.
   if (state.status === 'unavailable') return null
+
+  // Пустой список — тоже не показываем: «сделок пока нет» на главной выглядит
+  // как поломка, а не как честная информация.
+  if (state.status === 'ready' && state.trades.length === 0) return null
 
   return (
     <div className="card trades-card">
@@ -62,17 +74,22 @@ export default function RecentTrades() {
         <div className="trades-empty">Загружаем историю…</div>
       )}
 
-      {state.status === 'ready' && state.trades.length === 0 && (
-        <div className="trades-empty">
-          Сделок пока нет. Пул существует, но по нему давно не торговали.
-        </div>
-      )}
-
-      {state.status === 'ready' && state.trades.length > 0 && (
+      {state.status === 'ready' && (
         <div className="trades-list">
           {state.trades.map((t) => {
-            // Цена приходит как WBNB за второй токен пары; показываем в удобном виде.
-            const priceInBnb = t.zeroForOne ? t.price : t.price > 0 ? 1 / t.price : 0
+            // В базе цена лежит как token1 за token0, то есть WBNB за 1 USDT
+            // (около 0.0018). На экране нужна привычная цена — USDT за 1 WBNB,
+            // поэтому переворачиваем её один раз здесь.
+            //
+            // Раньше переворот зависел от направления сделки, хотя цена в базе
+            // уже нормализована по направлению. Из-за этого половина строк
+            // показывала 0.0018, а половина — 540, и подпись «BNB» не имела
+            // отношения ни к одной из них.
+            const usdtPerBnb = t.price > 0 ? 1 / t.price : 0
+
+            // zeroForOne = вход в token0, то есть USDT -> WBNB: покупают WBNB.
+            const buying = t.zeroForOne
+
             return (
               <a
                 key={`${t.txHash}-${t.block}`}
@@ -81,10 +98,12 @@ export default function RecentTrades() {
                 target="_blank"
                 rel="noreferrer"
               >
-                <span className={`trade-dir ${t.zeroForOne ? 'sell' : 'buy'}`}>
-                  {t.zeroForOne ? 'Продажа' : 'Покупка'}
+                <span className={`trade-dir ${buying ? 'buy' : 'sell'}`}>
+                  {buying ? 'Покупка' : 'Продажа'}
                 </span>
-                <span className="trade-price mono">{formatPrice(priceInBnb)} BNB</span>
+                <span className="trade-price mono">
+                  {formatPrice(usdtPerBnb)} USDT
+                </span>
                 <span className="trade-time">{timeAgo(t.ts)}</span>
               </a>
             )
