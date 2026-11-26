@@ -4,6 +4,11 @@ pragma solidity 0.8.24;
 import './interfaces.sol';
 import './SementsulV3Math.sol';
 
+// Sementsul DEX — https://sementsul.net/
+//
+// Исходники: https://github.com/sementsul/sementsul-dex
+// Этот файл содержит и фабрику, и пул концентрированной ликвидности.
+//
 // SementsulV3Factory — фабрика концентрированных пулов (аналог V3).
 //
 // ТИРЫ КОМИССИИ.
@@ -1035,6 +1040,12 @@ contract SementsulV3Pool {
         // неверным.
         (uint256 inside0, uint256 inside1) = _feeGrowthInside(tickLower, tickUpper, tick);
 
+        // Свежая позиция — та, у которой ликвидности ещё нет (первый вход в
+        // этот диапазон от этого владельца) либо она была выведена целиком.
+        // Для неё снимок комиссии ниже пересчитывается заново: см. пояснение
+        // у записи feeGrowthInsideLastX128 в конце функции.
+        bool fresh = position.liquidity == 0 && liquidityDelta > 0;
+
         if (position.liquidity > 0) {
             uint128 owed0 = uint128(
                 FullMath.mulDiv(inside0 - position.feeGrowthInside0LastX128, position.liquidity, 2 ** 128)
@@ -1102,6 +1113,33 @@ contract SementsulV3Pool {
 
             position.liquidity = LiquidityMath.addDelta(position.liquidity, liquidityDelta);
             require(sqrtPriceX96 != 0, 'Sementsul: NOT_INITIALIZED');
+        }
+
+        // Снимок комиссии, от которого потом считается начисленное.
+        //
+        // ВАЖНО: для свежей позиции inside0/inside1, посчитанные ВЫШЕ, уже
+        // устарели. _updateTick только что инициализировал тики и выставил
+        // нижнему feeGrowthOutside = feeGrowthGlobal (если он не выше текущего
+        // тика). В момент верхнего замера тики были ещё пустыми, их outside
+        // равнялся нулю, поэтому inside получался равным ВСЕМУ global — хотя
+        // позиция не заработала ни одной комиссии.
+        //
+        // Записав такое значение в last, мы обрекаем позицию на откат по
+        // переполнению: при следующем обращении inside станет примерно нулём,
+        // и inside - last уйдёт в минус, а Solidity 0.8 на этом падает
+        // (Panic 0x11). Позиция перестаёт отвечать и на collect, и на burn.
+        //
+        // Поэтому для свежей позиции снимок пересчитывается уже ПОСЛЕ
+        // инициализации тиков — тогда last совпадает с тем inside, который
+        // будет посчитан при следующем обращении, и разница честно равна нулю.
+        // У Uniswap этой ветки нет, потому что Position.update не трогает
+        // feeGrowthInsideLast у позиции с нулевой ликвидностью: там снимок
+        // остаётся нулевым. У нас структура одна на всё, включая сборы, и
+        // нулевой снимок означал бы «начислено всё с начала времён», что
+        // приводит к другому виду переполнения. Пересчёт после инициализации
+        // даёт то же поведение и не зависит от истории.
+        if (fresh) {
+            (inside0, inside1) = _feeGrowthInside(tickLower, tickUpper, tick);
         }
 
         position.feeGrowthInside0LastX128 = inside0;

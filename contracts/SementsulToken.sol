@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
+// Sementsul DEX — https://sementsul.net/
+//
+// Исходники: https://github.com/sementsul/sementsul-dex
+//
 // SementsulToken — SEM, токен без администратора.
 //
 // Доверие к токену определяется не обещаниями, а тем, чего в контракте НЕТ.

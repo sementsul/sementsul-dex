@@ -3,6 +3,11 @@ pragma solidity 0.8.24;
 
 import './interfaces.sol';
 
+// Sementsul DEX — https://sementsul.net/
+//
+// Исходники: https://github.com/sementsul/sementsul-dex
+// Этот файл содержит и фабрику, и пул с постоянным произведением.
+//
 // SementsulFactory — фабрика пулов с постоянным произведением (аналог V2).
 //
 // Зачем своя фабрика, если есть Pancake V2: там комиссия зашита в контракт

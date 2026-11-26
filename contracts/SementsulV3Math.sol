@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity 0.8.24;
 
+// Sementsul DEX — https://sementsul.net/
+//
+// Исходники: https://github.com/sementsul/sementsul-dex
+//
 // Математика концентрированной ликвидности (аналог V3).
 //
 // Цена хранится как sqrtPriceX96: квадратный корень из отношения цен, умноженный

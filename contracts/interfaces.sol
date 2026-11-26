@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity 0.8.24;
 
+// Sementsul DEX — https://sementsul.net/
+//
+// Исходники: https://github.com/sementsul/sementsul-dex
+//
 // Общие интерфейсы протокола Sementsul.
 // Файл самодостаточен: никаких импортов, чтобы контракты собирались без
 // внешних зависимостей и node_modules.

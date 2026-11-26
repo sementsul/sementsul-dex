@@ -4,6 +4,10 @@ pragma solidity 0.8.24;
 import './interfaces.sol';
 import './SementsulV2.sol';
 
+// Sementsul DEX — https://sementsul.net/
+//
+// Исходники: https://github.com/sementsul/sementsul-dex
+//
 // SementsulRouter — точка входа для пользователя.
 //
 // Роутер не хранит средства и не имеет владельца: всё, что он делает, —
