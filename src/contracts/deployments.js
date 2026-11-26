@@ -43,5 +43,15 @@ export default {
   // пула Pancake WBNB/USDT, который стоял здесь по умолчанию.
   "tradesPair": "0x64Dbdff7478fb32A61d8BbA84a29983412FFeb18",
   "tradesPairLabel": "SEM / WBNB",
-  "tradesPairProtocol": "v2"
+  "tradesPairProtocol": "v2",
+
+  // Второй свой пул: WBNB/USDT в V3, тир 0.05%. Это та пара, которой
+  // торгуют боты и на которой стоит ликвидность в Pancake, — смысл в том,
+  // чтобы она была и у нас.
+  //
+  // Цена задана при создании из пула Pancake 0.01% и совпадает с рынком.
+  // Ликвидности пока нет: пул пустой до первого mint.
+  "wbnbUsdtV3Pool": "0x3688726E5811E766A0cA014dCEC24622c0d02583",
+  "wbnbUsdtV3Fee": 500,
+  "wbnbUsdtV3TickSpacing": 10
 }
