@@ -145,47 +145,66 @@ if (forgeResult.skipped) {
 results.push({ label: 'Foundry: фаззинг и инварианты', ...forgeResult })
 
 // Браузерные проверки требуют запущенного сервера и установленного Chrome,
-// поэтому по умолчанию пропускаются: иначе тесты нельзя будет запустить на
-// машине без них. Включаются явно:
+// Браузерные наборы требуют Chrome и собранного dist, поэтому по умолчанию
+// пропускаются: иначе тесты нельзя будет запустить на машине без них. Включаются
+// явно:
+//   npm run build
 //   npx serve dist -l 4173        (в отдельном окне)
 //   BROWSER_TESTS=1 npm test
 // URL можно переопределить через BROWSER_URL.
-let browserResult = { skipped: true, passed: 0, failed: 0 }
-process.stdout.write(`${'браузер: язык и условия использования'.padEnd(44)} `)
-if (process.env.BROWSER_TESTS === '1') {
-  const url = process.env.BROWSER_URL ?? 'http://localhost:4173'
-  const r = await new Promise((resolve) => {
-    const child = spawn(process.execPath, [join('scripts', 'test-browser-i18n.mjs'), url], {
-      cwd: ROOT,
-      stdio: ['ignore', 'pipe', 'inherit'],
+//
+// test-browser-chart.mjs поднимает свой сервер с заголовками из dist/_headers,
+// поэтому BROWSER_URL ему не нужен: CSP проверяется только с реальными
+// заголовками, а `serve` их не отдаёт.
+const BROWSER_SUITES = [
+  { label: 'браузер: язык и условия использования', script: 'test-browser-i18n.mjs', args: [] },
+  { label: 'браузер: график пула и CSP', script: 'test-browser-chart.mjs', args: [] },
+]
+
+const browserTotals = { passed: 0, failed: 0 }
+
+for (const suite of BROWSER_SUITES) {
+  process.stdout.write(`${suite.label.padEnd(44)} `)
+  let result
+  if (process.env.BROWSER_TESTS === '1') {
+    const url = process.env.BROWSER_URL ?? 'http://localhost:4173'
+    const argv = [join('scripts', suite.script)]
+    if (suite.script === 'test-browser-i18n.mjs') argv.push(url)
+    result = await new Promise((resolve) => {
+      const child = spawn(process.execPath, argv, {
+        cwd: ROOT,
+        stdio: ['ignore', 'pipe', 'inherit'],
+      })
+      let out = ''
+      child.stdout.on('data', (d) => {
+        out += d.toString()
+      })
+      child.on('close', (code) => {
+        const m = out.match(/(\d+) passed, (\d+) failed/)
+        resolve({ code, passed: m ? Number(m[1]) : 0, failed: m ? Number(m[2]) : 1, out })
+      })
     })
-    let out = ''
-    child.stdout.on('data', (d) => {
-      out += d.toString()
-    })
-    child.on('close', (code) => {
-      const m = out.match(/(\d+) passed, (\d+) failed/)
-      resolve({ code, passed: m ? Number(m[1]) : 0, failed: m ? Number(m[2]) : 1, out })
-    })
-  })
-  if (r.failed === 0) {
-    console.log(`OK   ${r.passed} проверок`)
-  } else {
-    console.log(`FAIL ${r.passed} прошло, ${r.failed} упало`)
-    for (const line of r.out.split('\n').filter((l) => l.includes('FAIL'))) {
-      console.log(`     ${line.trim()}`)
+    if (result.failed === 0) {
+      console.log(`OK   ${result.passed} проверок`)
+    } else {
+      console.log(`FAIL ${result.passed} прошло, ${result.failed} упало`)
+      for (const line of result.out.split('\n').filter((l) => l.includes('FAIL'))) {
+        console.log(`     ${line.trim()}`)
+      }
     }
+  } else {
+    console.log('ПРОПУЩЕН (BROWSER_TESTS=1 для запуска)')
+    result = { skipped: true, passed: 0, failed: 0 }
   }
-  browserResult = r
-} else {
-  console.log('ПРОПУЩЕН (BROWSER_TESTS=1 для запуска)')
+  results.push({ label: suite.label, ...result })
+  browserTotals.passed += result.passed ?? 0
+  browserTotals.failed += result.failed ?? 0
 }
-results.push({ label: 'браузер: язык и условия использования', ...browserResult })
 
 const bad = results.filter((r) => r.failed > 0)
 
-const browserPassed = browserResult.passed ?? 0
-const browserFailed = browserResult.failed ?? 0
+const browserPassed = browserTotals.passed
+const browserFailed = browserTotals.failed
 
 console.log(`\nитого: ${totalPassed + (forgeResult.passed ?? 0) + browserPassed} проверок прошло, ${totalFailed + (forgeResult.failed ?? 0) + browserFailed} упало`)
 if (bad.length) {

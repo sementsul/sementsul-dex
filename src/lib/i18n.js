@@ -217,6 +217,18 @@ export const RU = {
   'pools.tvlNote':
     'Это общая стоимость токенов, заблокированных в пуле, — сумма обоих резервов в долларах. Чем выше TVL, тем меньше проскальзывание при обмене и тем больше комиссий получают поставщики ликвидности. Прочерк в колонке TVL означает, что у нас нет надёжного пути к цене в USDT, а не то, что пул пустой.',
 
+  // --- график пула ---
+  'chart.show': 'Показать график',
+  'chart.thirdPartyHint': 'Данные и график предоставляет DexScreener — это внешний сервис, не мы.',
+  'chart.checking': 'Проверяем, есть ли пул в DexScreener…',
+  'chart.notIndexed': 'Пула {a}/{b} пока нет в DexScreener.',
+  'chart.notIndexedWhy':
+    'Сервис подхватывает новые пулы не мгновенно, а иногда не подхватывает вовсе. Обмен и добавление ликвидности от этого не зависят — они работают через наши контракты напрямую.',
+  'chart.openExternal': 'Открыть на DexScreener',
+  'chart.frameTitle': 'График {a}/{b} на DexScreener',
+  'chart.note':
+    'График и цены на нём — данные третьей стороны, мы их не проверяем и не контролируем. Если сервис недоступен, график не откроется; на обмен это не влияет.',
+
   // --- ликвидность ---
   'liq.backToPools': '← Назад к пулам',
   'liq.add': 'Добавить',
@@ -489,6 +501,18 @@ export const EN = {
   'pools.tvlNoteTitle': 'What TVL is.',
   'pools.tvlNote':
     'It is the total value of the tokens locked in the pool — both reserves summed in dollars. The higher the TVL, the lower the slippage on a swap and the more fees liquidity providers earn. A dash in the TVL column means we have no reliable path to a USDT price, not that the pool is empty.',
+
+  // --- pool chart ---
+  'chart.show': 'Show chart',
+  'chart.thirdPartyHint': 'The chart and its data come from DexScreener — an external service, not us.',
+  'chart.checking': 'Checking whether DexScreener knows this pool…',
+  'chart.notIndexed': 'DexScreener has not picked up {a}/{b} yet.',
+  'chart.notIndexedWhy':
+    'The service does not list new pools instantly, and sometimes never does. Swapping and adding liquidity do not depend on it — they go straight to our contracts.',
+  'chart.openExternal': 'Open on DexScreener',
+  'chart.frameTitle': '{a}/{b} chart on DexScreener',
+  'chart.note':
+    'The chart and the prices on it are third-party data. We do not verify or control them. If the service is down, the chart will not load; that does not affect swaps.',
 
   // --- liquidity ---
   'liq.backToPools': '← Back to pools',

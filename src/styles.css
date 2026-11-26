@@ -1280,6 +1280,70 @@ a:hover {
   color: var(--text);
 }
 
+/* ---------- график пула ---------- */
+
+/* Свёрнутое состояние — это просто строка с кнопкой, а не пустая рамка.
+   Рамка на месте графика выглядела бы как «загружается» и врала бы. */
+.pool-chart-collapsed {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.pool-chart {
+  margin-bottom: 16px;
+}
+
+/* Соотношение сторон фиксируем, иначе при загрузке iframe страница прыгает
+   вниз — форма уезжает из-под курсора. */
+.pool-chart-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  min-height: 320px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  overflow: hidden;
+}
+
+.pool-chart-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.pool-chart-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.pool-chart-note a {
+  color: var(--accent);
+}
+
+.pool-chart-missing {
+  margin-bottom: 16px;
+  padding: 16px;
+  border-radius: var(--radius);
+  border: 1px dashed var(--border);
+  font-size: 13px;
+}
+
+.pool-chart-missing p {
+  margin: 0 0 8px;
+}
+
+.pool-chart-missing .ghost-btn {
+  margin-top: 4px;
+}
+
 /* ---------- формы ---------- */
 
 .form-card {

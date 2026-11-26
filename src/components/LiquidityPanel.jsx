@@ -16,6 +16,7 @@ import { V2_ROUTER } from '../lib/chain.js'
 import { SEL, encAddress, encUint } from '../lib/abi.js'
 import { TokenIcon, Notice, Spinner, CopyAddress } from './ui.jsx'
 import { useI18n } from '../lib/useI18n.jsx'
+import PoolChart from './PoolChart.jsx'
 
 const MAX_UINT256 = (1n << 256n) - 1n
 
@@ -58,6 +59,14 @@ export function LiquidityPanel({ pool, wallet, onBack, onDone }) {
           <span className="mono">{pool.tvl === null ? '—' : formatUsd(pool.tvl)}</span>
         </div>
       </div>
+
+      {/* График стоит над формой, но свёрнут: тот, кто пришёл добавить
+          ликвидность, не должен ждать загрузки чужой страницы. */}
+      <PoolChart
+        pair={pool.address}
+        symbol0={pool.token0.symbol}
+        symbol1={pool.token1.symbol}
+      />
 
       <div className="segmented tabs">
         <button className={mode === 'add' ? 'seg active' : 'seg'} onClick={() => setMode('add')}>
