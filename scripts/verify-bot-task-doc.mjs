@@ -141,12 +141,33 @@ for (const [name, sig, expect, inCode] of selChecks) {
 
 console.log('')
 console.log('--- 10. Ключ позиции ---')
+// Проверяем не «есть ли ликвидность у конкретного владельца в конкретном
+// диапазоне» — после переезда ликвидность лежит в другом диапазоне, и жёсткие
+// числа ломались бы при каждом переезде. Проверяем само свойство ключа:
+// encodePacked-ключ отличается от encode-ключа, и позиция читается по первому.
+//
+// Границы берём из события Mint: это точный источник, а не перебор, который
+// не находит несимметричные диапазоны.
 const owner = '0x22eA591615435a2aF0F705962f85C55FE7B4eB5C'
-const packed = keccak256(encodePacked(['address', 'int24', 'int24'], [owner, -63360, -62950]))
-const encoded = keccak256(encodeAbiParameters(parseAbiParameters('address, int24, int24'), [owner, -63360, -62950]))
+const mintLogs = await client.getLogs({
+  address: POOL,
+  event: artifacts.SementsulV3Pool.abi.find((x) => x.type === 'event' && x.name === 'Mint'),
+  args: { owner },
+  // Окно 9 000 блоков: у публичного RPC это фактический предел на eth_getLogs
+// (он отвечает «query exceeds max block range 10000»). Пул молодой, поэтому
+// от текущего блока назад с запасом достаточно.
+  fromBlock: (await client.getBlockNumber()) - 9_000n,
+  toBlock: 'latest',
+})
+if (mintLogs.length === 0) throw new Error('в пуле нет событий Mint от получателя')
+const lastMint = mintLogs[mintLogs.length - 1].args
+const [loB, hiB] = [Number(lastMint.tickLower), Number(lastMint.tickUpper)]
+console.log(`  диапазон из события Mint: ${loB}..${hiB}`)
+const packed = keccak256(encodePacked(['address', 'int24', 'int24'], [owner, loB, hiB]))
+const encoded = keccak256(encodeAbiParameters(parseAbiParameters('address, int24, int24'), [owner, loB, hiB]))
 const pPacked = await client.readContract({ address: POOL, abi, functionName: 'positions', args: [packed] })
 const pEncoded = await client.readContract({ address: POOL, abi, functionName: 'positions', args: [encoded] })
-check('encodePacked даёт позицию', pPacked[0] > 0n, 'liquidity=' + pPacked[0])
+check('encodePacked даёт позицию', pPacked[0] > 0n, `liquidity=${pPacked[0]}`)
 check('encode даёт нули', pEncoded[0] === 0n, 'liquidity=' + pEncoded[0])
 
 console.log('')

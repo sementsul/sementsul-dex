@@ -49,12 +49,12 @@ key = keccak256(abi.encodePacked(owner, int24 tickLower, int24 tickUpper))
 ## 2. Наш пул
 
 ```
-Адрес:        0x3688726E5811E766A0cA014dCEC24622c0d02583
+Адрес:        0x37c7702B589c69D1e4f4ad32E19f372ED6780278
 Пара:         token0 = USDT, token1 = WBNB
 Комиссия:     500  (0.05%, единицы 1e-6)
 Шаг тика:     10
-Фабрика:      0xd8Fbf8047dF940a3640F7b853974B7CFa52dC585
-Роутер V3:    0xc2163ed29ecF3Eadb6cc253271cC04b98e0ca5f7
+Фабрика:      0xc0b597bee57bba0aae2ce9e73e83217331a24dd9
+Роутер V3:    0xf98b7f4effb34dae1f785010ecf71ff796e7fdd1
 ```
 
 Порядок токенов: **USDT — token0, WBNB — token1**. У Pancake в тире 0.05%
@@ -315,7 +315,7 @@ Transaction gas limit too high (cap: 16777216, tx: 28000000)
 
 ## 10. Минимальный чек-лист перед запуском
 
-- [ ] Заменить `ADDR.pool` на `0x3688726E5811E766A0cA014dCEC24622c0d02583`
+- [ ] Заменить `ADDR.pool` на `0x37c7702B589c69D1e4f4ad32E19f372ED6780278`
 - [ ] Заменить `ADDR.npm` — у нас его нет; переписать `mint`/`burn`/`collect` на прямые вызовы пула
 - [ ] Переписать работу с позициями: нет `tokenId`, есть `(owner, lower, upper)`
 - [ ] Взять ABI пула из `artifacts.json`, проверить, что `slot0` декодируется 5 полями
@@ -358,9 +358,9 @@ ok   BNB -> USDT: честно отказывает
 
 ## 12. Ссылки
 
-- Пул: https://bscscan.com/address/0x3688726E5811E766A0cA014dCEC24622c0d02583
-- Фабрика V3: https://bscscan.com/address/0xd8Fbf8047dF940a3640F7b853974B7CFa52dC585
-- Роутер V3: https://bscscan.com/address/0xc2163ed29ecF3Eadb6cc253271cC04b98e0ca5f7
+- Пул: https://bscscan.com/address/0x37c7702B589c69D1e4f4ad32E19f372ED6780278
+- Фабрика V3: https://bscscan.com/address/0xc0b597bee57bba0aae2ce9e73e83217331a24dd9
+- Роутер V3: https://bscscan.com/address/0xf98b7f4effb34dae1f785010ecf71ff796e7fdd1
 - Исходники: https://github.com/sementsul/sementsul-dex
 - ABI: `sementsul-dex/src/contracts/artifacts.json`
 - Адреса: `sementsul-dex/src/contracts/deployments.js`

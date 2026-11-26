@@ -89,10 +89,28 @@ const k = await client.readContract({
 check('reversalPenaltyK = 0 (выключен)', Number(k) === 0, k === null ? 'функция не найдена' : String(k))
 
 // --- Ключ позиции: encodePacked против encode ---
+//
+// Границы диапазона берём из события Mint, а не из чисел в тексте: после
+// переезда ликвидность лежит в другом диапазоне, и жёсткие числа ломались бы
+// при каждом передеплое.
 const { encodePacked, encodeAbiParameters, parseAbiParameters } = await import('viem')
 const owner = '0x22eA591615435a2aF0F705962f85C55FE7B4eB5C'
-const packed = keccak256(encodePacked(['address', 'int24', 'int24'], [owner, -63360, -62950]))
-const encoded = keccak256(encodeAbiParameters(parseAbiParameters('address, int24, int24'), [owner, -63360, -62950]))
+const mintEvt = artifacts.SementsulV3Pool.abi.find((x) => x.type === 'event' && x.name === 'Mint')
+const mints = await client.getLogs({
+  address: POOL,
+  event: mintEvt,
+  args: { owner },
+  // 9 000 блоков — фактический предел публичного RPC на eth_getLogs.
+  fromBlock: (await client.getBlockNumber()) - 9_000n,
+  toBlock: 'latest',
+})
+if (mints.length === 0) throw new Error('в пуле нет событий Mint от получателя')
+const m = mints[mints.length - 1].args
+const loT = Number(m.tickLower)
+const hiT = Number(m.tickUpper)
+console.log(`  диапазон из события Mint: ${loT}..${hiT}`)
+const packed = keccak256(encodePacked(['address', 'int24', 'int24'], [owner, loT, hiT]))
+const encoded = keccak256(encodeAbiParameters(parseAbiParameters('address, int24, int24'), [owner, loT, hiT]))
 check('encodePacked != encode (ключ различается)', packed !== encoded)
 
 // Ключ из encodePacked должен давать непустую позицию.
