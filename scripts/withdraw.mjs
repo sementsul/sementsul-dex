@@ -32,6 +32,7 @@ import {
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { bsc } from 'viem/chains'
+import { selectTargets, resolveTokenAddress } from './lib/withdraw-targets.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -75,15 +76,31 @@ function readEnv(name) {
 
 const read = createPublicClient({ chain: bsc, transport: http(RPC_READ) })
 
+// Принимает либо адрес токена, либо объект { address, decimals }.
+//
+// Раньше функция ждала объект, а вызывалась с адресом (строкой). Тогда
+// token.address давал undefined, readContract падал с «Transaction creation
+// failed», ошибка глушилась в catch и превращалась в 0n. Снаружи это
+// выглядело как пустой кошелёк: скрипт показывал 0 USDT там, где лежало
+// 134 USDT. Разбор адреса и проверка формата вынесены в lib/withdraw-targets,
+// чтобы это покрывалось тестом без сети.
 async function balanceOf(token, owner) {
+  const address = resolveTokenAddress(token)
   try {
     return await read.readContract({
-      address: token.address,
+      address,
       abi: erc20,
       functionName: 'balanceOf',
       args: [owner],
     })
-  } catch {
+  } catch (e) {
+    // Молча возвращать 0 нельзя: тогда «нет баланса» и «RPC не ответил»
+    // выглядят одинаково. Печатаем причину, но продолжаем — один сбойный
+    // токен не должен останавливать вывод остальных.
+    console.error(
+      `  не удалось прочитать баланс ${address}:`,
+      e.cause?.shortMessage ?? e.shortMessage ?? e.message
+    )
     return 0n
   }
 }
@@ -150,12 +167,14 @@ async function main() {
   console.log('\nрезерв на газ:', formatEther(gasReserve), 'BNB')
 
   // ---------- токены ----------
+  //
+  // Что отправлять, решает selectTargets: --token SYM — только он, --all — все
+  // найденные, без флагов — ничего. Раньше обе ветки тернарника возвращали
+  // found, поэтому вызов без --all молча отправлял все токены, и
+  // «--token WBNB» уводил заодно SEM на 900 млн. Деньги не должны уходить по
+  // умолчанию: нужен явный выбор.
   const only = arg('--token')
-  const targets = only
-    ? found.filter((t) => t.sym.toLowerCase() === only.toLowerCase())
-    : allTokens
-      ? found
-      : found
+  const targets = selectTargets(found, { only, all: allTokens })
 
   if (only && !targets.length) {
     console.error(`\nошибка: на кошельке нет ${only}`)
