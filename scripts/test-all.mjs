@@ -28,6 +28,9 @@ const SUITES = [
   ['комплаенс: гео и санкционный список', 'test-compliance.mjs'],
   ['комплаенс: гейт транзакций и dist', 'test-compliance-integration.mjs'],
   ['комплаенс: документация против кода', 'test-compliance-docs.mjs'],
+  ['локализация: словари, определение языка, литералы', 'test-i18n.mjs'],
+  ['условия использования и пункт про ЕЭЗ', 'test-terms.mjs'],
+  ['README против файлов и набора тестов', 'test-readme.mjs'],
   ['база знаний и форматирование', 'test-knowledge.mjs'],
 ]
 
@@ -141,9 +144,50 @@ if (forgeResult.skipped) {
 }
 results.push({ label: 'Foundry: фаззинг и инварианты', ...forgeResult })
 
+// Браузерные проверки требуют запущенного сервера и установленного Chrome,
+// поэтому по умолчанию пропускаются: иначе тесты нельзя будет запустить на
+// машине без них. Включаются явно:
+//   npx serve dist -l 4173        (в отдельном окне)
+//   BROWSER_TESTS=1 npm test
+// URL можно переопределить через BROWSER_URL.
+let browserResult = { skipped: true, passed: 0, failed: 0 }
+process.stdout.write(`${'браузер: язык и условия использования'.padEnd(44)} `)
+if (process.env.BROWSER_TESTS === '1') {
+  const url = process.env.BROWSER_URL ?? 'http://localhost:4173'
+  const r = await new Promise((resolve) => {
+    const child = spawn(process.execPath, [join('scripts', 'test-browser-i18n.mjs'), url], {
+      cwd: ROOT,
+      stdio: ['ignore', 'pipe', 'inherit'],
+    })
+    let out = ''
+    child.stdout.on('data', (d) => {
+      out += d.toString()
+    })
+    child.on('close', (code) => {
+      const m = out.match(/(\d+) passed, (\d+) failed/)
+      resolve({ code, passed: m ? Number(m[1]) : 0, failed: m ? Number(m[2]) : 1, out })
+    })
+  })
+  if (r.failed === 0) {
+    console.log(`OK   ${r.passed} проверок`)
+  } else {
+    console.log(`FAIL ${r.passed} прошло, ${r.failed} упало`)
+    for (const line of r.out.split('\n').filter((l) => l.includes('FAIL'))) {
+      console.log(`     ${line.trim()}`)
+    }
+  }
+  browserResult = r
+} else {
+  console.log('ПРОПУЩЕН (BROWSER_TESTS=1 для запуска)')
+}
+results.push({ label: 'браузер: язык и условия использования', ...browserResult })
+
 const bad = results.filter((r) => r.failed > 0)
 
-console.log(`\nитого: ${totalPassed + (forgeResult.passed ?? 0)} проверок прошло, ${totalFailed + (forgeResult.failed ?? 0)} упало`)
+const browserPassed = browserResult.passed ?? 0
+const browserFailed = browserResult.failed ?? 0
+
+console.log(`\nитого: ${totalPassed + (forgeResult.passed ?? 0) + browserPassed} проверок прошло, ${totalFailed + (forgeResult.failed ?? 0) + browserFailed} упало`)
 if (bad.length) {
   console.log('\nнаборы с ошибками:')
   for (const b of bad) console.log(`  - ${b.label}`)

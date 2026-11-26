@@ -1,6 +1,7 @@
 // Переиспользуемые UI-примитивы.
 
 import { useEffect, useState } from 'react'
+import { useI18n } from '../lib/useI18n.jsx'
 
 // Иконка токена с откатом на первую букву, если логотип не загрузился.
 // Раньше здесь были первые три буквы символа — рядом с самим символом это
@@ -30,6 +31,7 @@ export function TokenIcon({ token, size = 22 }) {
 
 // Модалка выбора токена.
 export function TokenPicker({ tokens, exclude, onSelect, onClose, balances, onAddToken }) {
+  const { t } = useI18n()
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -66,7 +68,7 @@ export function TokenPicker({ tokens, exclude, onSelect, onClose, balances, onAd
       const token = await onAddToken(query.trim())
       if (token) onSelect(token)
     } catch (e) {
-      setError(e?.message ?? 'Не удалось загрузить токен')
+      setError(e?.message ?? t('token.loadFailed'))
     } finally {
       setLoading(false)
     }
@@ -76,15 +78,15 @@ export function TokenPicker({ tokens, exclude, onSelect, onClose, balances, onAd
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <span>Выберите токен</span>
-          <button className="close-btn" onClick={onClose} aria-label="Закрыть">
+          <span>{t('token.choose')}</span>
+          <button className="close-btn" onClick={onClose} aria-label={t('token.close')}>
             ×
           </button>
         </div>
         <div className="modal-search">
           <input
             autoFocus
-            placeholder="Название или адрес 0x…"
+            placeholder={t('token.searchPlaceholder')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -105,7 +107,7 @@ export function TokenPicker({ tokens, exclude, onSelect, onClose, balances, onAd
               </span>
               <div className="token-item-info">
                 <div className="token-item-symbol">
-                  {loading ? 'Загружаем токен…' : 'Импортировать токен'}
+                  {loading ? t('token.importing') : t('token.import')}
                 </div>
                 <div className="token-item-name mono">{query.trim()}</div>
               </div>
@@ -118,25 +120,27 @@ export function TokenPicker({ tokens, exclude, onSelect, onClose, balances, onAd
 
           {list.length === 0 && !canImport && (
             <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-faint)', fontSize: 13 }}>
-              {q.length === 42 ? 'Такого токена нет в списке' : 'Ничего не найдено'}
+              {q.length === 42 ? t('token.notInList') : t('token.notFound')}
             </div>
           )}
-          {list.map((t) => {
-            const bal = balances?.[t.address.toLowerCase()]
+          {list.map((titem) => {
+            const bal = balances?.[titem.address.toLowerCase()]
             return (
-              <button key={t.address} className="token-item" onClick={() => onSelect(t)}>
-                <TokenIcon token={t} size={30} />
+              <button key={titem.address} className="token-item" onClick={() => onSelect(titem)}>
+                <TokenIcon token={titem} size={30} />
                 <div className="token-item-info">
                   <div className="token-item-symbol">
-                    {t.symbol}
-                    {t.verified && <span className="verified-mark" title="Проверенный токен">✓</span>}
-                    {t.imported && (
+                    {titem.symbol}
+                    {titem.verified && (
+                      <span className="verified-mark" title={t('token.verified')}>✓</span>
+                    )}
+                    {titem.imported && (
                       <span style={{ fontSize: 10, color: 'var(--text-faint)', fontWeight: 500 }}>
-                        импортирован
+                        {t('token.imported')}
                       </span>
                     )}
                   </div>
-                  <div className="token-item-name">{t.name}</div>
+                  <div className="token-item-name">{titem.name}</div>
                 </div>
                 {bal !== undefined && bal !== null && (
                   <span className="mono" style={{ fontSize: 12, color: 'var(--text-dim)' }}>
@@ -197,6 +201,7 @@ export function Notice({ kind = 'info', children }) {
 // localhost). На http он есть в объекте, но writeText отклоняется — поэтому
 // предусмотрен запасной путь через скрытое поле и execCommand.
 export function CopyAddress({ address, chars = 4, label, className = '' }) {
+  const { t } = useI18n()
   const [copied, setCopied] = useState(false)
   const [failed, setFailed] = useState(false)
 
@@ -216,7 +221,7 @@ export function CopyAddress({ address, chars = 4, label, className = '' }) {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(address)
       } else {
-        throw new Error('нет clipboard api')
+        throw new Error('clipboard api unavailable')
       }
     } catch {
       // Запасной путь: старый способ через выделение скрытого поля.
@@ -231,7 +236,7 @@ export function CopyAddress({ address, chars = 4, label, className = '' }) {
         ta.select()
         const ok = document.execCommand('copy')
         document.body.removeChild(ta)
-        if (!ok) throw new Error('execCommand отказал')
+        if (!ok) throw new Error('execCommand copy failed')
       } catch {
         setFailed(true)
         setTimeout(() => setFailed(false), 2000)
@@ -242,15 +247,15 @@ export function CopyAddress({ address, chars = 4, label, className = '' }) {
   }
 
   const short = `${address.slice(0, chars + 2)}...${address.slice(-chars)}`
-  const text = copied ? 'скопировано' : failed ? 'не удалось' : label ?? short
+  const text = copied ? t('copy.copied') : failed ? t('copy.failed') : label ?? short
 
   return (
     <button
       type="button"
       className={`copy-addr ${copied ? 'ok' : ''} ${failed ? 'bad' : ''} ${className}`}
       onClick={copy}
-      title={copied ? 'адрес в буфере' : `скопировать ${address}`}
-      aria-label={`скопировать адрес ${address}`}
+      title={copied ? t('copy.inBuffer') : t('copy.copyAddress', { address })}
+      aria-label={t('copy.copyAddressAria', { address })}
     >
       <span className="mono">{text}</span>
       <span className="copy-icon" aria-hidden="true">

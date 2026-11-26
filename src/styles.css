@@ -640,6 +640,47 @@ a:hover {
   color: var(--text-dim);
 }
 
+/* Ссылка на условия в подвале — кнопка, а не <a>: она переключает вкладку,
+   не меняя адрес. Внешне должна совпадать с соседними ссылками, иначе
+   выглядит как элемент другой природы. */
+.footer-link-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  cursor: pointer;
+}
+
+.footer-link-btn:hover {
+  color: var(--accent);
+}
+
+/* ---------- условия использования ---------- */
+
+.terms-summary {
+  margin-bottom: 24px;
+  border-left: 3px solid var(--accent);
+}
+
+.terms-summary ul {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.terms-summary li {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.terms-article section {
+  margin-bottom: 28px;
+}
+
 /* ---------- spinner ---------- */
 
 .spinner {
@@ -815,6 +856,43 @@ a:hover {
   color: var(--accent);
   background: var(--accent-soft);
   border-color: rgba(240, 185, 11, 0.3);
+}
+
+/* ---------- переключатель языка ---------- */
+
+/* Две кнопки в общей рамке: языков два, и выпадающий список здесь был бы
+   лишним кликом. Отступ слева отделяет группу от навигации. */
+.lang-switch {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 8px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border-soft);
+}
+
+.lang-btn {
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.lang-btn:hover {
+  color: var(--text);
+}
+
+.lang-btn.active {
+  color: var(--bg);
+  background: var(--accent);
 }
 
 /* ---------- страницы ---------- */
@@ -1545,6 +1623,44 @@ a:hover {
 /* ---------- адаптив ---------- */
 
 @media (max-width: 720px) {
+  /* Шапка в две строки: сверху бренд, переключатель языка и кошелёк, снизу
+     вкладки во всю ширину. Одной строкой всё это не помещается — с
+     добавлением переключателя шапка начала вылезать за экран на 194px и
+     появилась горизонтальная прокрутка. */
+  .header {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 14px;
+  }
+
+  .brand {
+    order: 1;
+  }
+
+  .lang-switch {
+    order: 2;
+    margin-left: auto;
+  }
+
+  .wallet-btn {
+    order: 3;
+  }
+
+  /* Вкладки уходят на свою строку. Горизонтальная прокрутка внутри навигации
+     — страховка на случай, если подписи окажутся длиннее ожидаемого
+     (например, в будущем языке): лучше прокрутить вкладки, чем сломать всю
+     страницу. */
+  .nav {
+    order: 4;
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+
   .page-head {
     flex-direction: column;
   }
@@ -1561,6 +1677,7 @@ a:hover {
   .nav-tab {
     padding: 7px 10px;
     font-size: 13px;
+    white-space: nowrap;
   }
 
   .pool-chevron {

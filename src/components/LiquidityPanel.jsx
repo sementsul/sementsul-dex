@@ -15,6 +15,7 @@ import { sendTransaction, waitForReceipt } from '../lib/wallet.js'
 import { V2_ROUTER } from '../lib/chain.js'
 import { SEL, encAddress, encUint } from '../lib/abi.js'
 import { TokenIcon, Notice, Spinner, CopyAddress } from './ui.jsx'
+import { useI18n } from '../lib/useI18n.jsx'
 
 const MAX_UINT256 = (1n << 256n) - 1n
 
@@ -27,13 +28,14 @@ const MAX_UINT256 = (1n << 256n) - 1n
 // а не доля в общем котле. Позиций может быть несколько, каждая со своим
 // диапазоном, поэтому «вывести всё» здесь не существует.
 export function LiquidityPanel({ pool, wallet, onBack, onDone }) {
+  const { t } = useI18n()
   const isV3 = pool.protocol === 'v3'
   const [mode, setMode] = useState('add')
 
   return (
     <div className="page">
       <button className="back-btn" onClick={onBack}>
-        ← Назад к пулам
+        {t('liq.backToPools')}
       </button>
 
       <div className="pool-hero">
@@ -59,13 +61,13 @@ export function LiquidityPanel({ pool, wallet, onBack, onDone }) {
 
       <div className="segmented tabs">
         <button className={mode === 'add' ? 'seg active' : 'seg'} onClick={() => setMode('add')}>
-          Добавить
+          {t('liq.add')}
         </button>
         <button
           className={mode === 'remove' ? 'seg active' : 'seg'}
           onClick={() => setMode('remove')}
         >
-          Вывести
+          {t('liq.remove')}
         </button>
       </div>
 
@@ -113,6 +115,7 @@ async function ensureAllowance({ token, owner, spender, amount }) {
 // ---------------------------------------------------------------------------
 
 function AddV2({ pool, wallet, onDone }) {
+  const { t } = useI18n()
   const compliance = wallet.compliance ?? {}
   const blocked = compliance.blocked ?? false
   const { account } = wallet
@@ -173,7 +176,7 @@ function AddV2({ pool, wallet, onDone }) {
     setBusy(true)
     setError(null)
     try {
-      setStatus('Подтвердите одобрение токенов…')
+      setStatus(t('tx.confirmApprove'))
       await ensureAllowance({
         token: pool.token0.address,
         owner: account,
@@ -187,7 +190,7 @@ function AddV2({ pool, wallet, onDone }) {
         amount: amt1,
       })
 
-      setStatus('Подтвердите добавление ликвидности…')
+      setStatus(t('tx.confirmAdd'))
       const tx = buildAddLiquidityV2({
         tokenA: pool.token0.address,
         tokenB: pool.token1.address,
@@ -197,9 +200,9 @@ function AddV2({ pool, wallet, onDone }) {
         to: account,
       })
       const hash = await sendTransaction(tx)
-      setStatus('Ждём подтверждения…')
+      setStatus(t('tx.waiting'))
       await waitForReceipt(hash)
-      setStatus('Ликвидность добавлена.')
+      setStatus(t('tx.liquidityAdded'))
       onDone?.()
     } catch (e) {
       setError(e?.shortMessage || e?.message || String(e))
@@ -224,17 +227,12 @@ function AddV2({ pool, wallet, onDone }) {
         onChange={setVal1}
         balance={bal1}
         disabled={busy || !poolEmpty}
-        hint={poolEmpty ? 'Первый поставщик задаёт цену' : 'Считается по пропорции пула'}
+        hint={poolEmpty ? t('liq.firstSetsPrice') : t('liq.byProportion')}
       />
 
-      {poolEmpty && (
-        <Notice kind="warn">
-          Пул пуст. Соотношение сумм, которое вы введёте, станет начальной ценой для всех.
-          Если цена окажется неверной, арбитражники заберут разницу.
-        </Notice>
-      )}
+      {poolEmpty && <Notice kind="warn">{t('liq.poolEmptyWarning')}</Notice>}
 
-      {insufficient && <Notice kind="error">Недостаточно средств на балансе.</Notice>}
+      {insufficient && <Notice kind="error">{t('liq.insufficient')}</Notice>}
       {status && (
         <Notice kind="info">
           {busy && <Spinner />} {status}
@@ -248,12 +246,12 @@ function AddV2({ pool, wallet, onDone }) {
 
       <button className="primary-btn" disabled={!canAdd || blocked} onClick={add}>
         {blocked
-          ? 'Операции заблокированы'
+          ? t('compliance.actionsBlocked')
           : !account
-            ? 'Сначала подключите кошелёк'
+            ? t('liq.connectFirst')
             : busy
-              ? 'Добавляем…'
-              : 'Добавить ликвидность'}
+              ? t('liq.adding')
+              : t('liq.addButton')}
       </button>
     </div>
   )
@@ -301,7 +299,7 @@ function RemoveV2({ pool, wallet, onDone }) {
     setBusy(true)
     setError(null)
     try {
-      setStatus('Подтвердите вывод ликвидности…')
+      setStatus(t('tx.confirmRemove'))
       const tx = buildRemoveLiquidityV2({
         tokenA: pool.token0.address,
         tokenB: pool.token1.address,
@@ -309,9 +307,9 @@ function RemoveV2({ pool, wallet, onDone }) {
         to: account,
       })
       const hash = await sendTransaction(tx)
-      setStatus('Ждём подтверждения…')
+      setStatus(t('tx.waiting'))
       await waitForReceipt(hash)
-      setStatus('Ликвидность выведена.')
+      setStatus(t('tx.liquidityRemoved'))
       onDone?.()
     } catch (e) {
       setError(e?.shortMessage || e?.message || String(e))
@@ -324,7 +322,7 @@ function RemoveV2({ pool, wallet, onDone }) {
   if (!account) {
     return (
       <div className="card form-card">
-        <Notice kind="info">Подключите кошелёк, чтобы увидеть свою позицию.</Notice>
+        <Notice kind="info">{t('liq.connectToSee')}</Notice>
       </div>
     )
   }
@@ -332,12 +330,12 @@ function RemoveV2({ pool, wallet, onDone }) {
   return (
     <div className="card form-card">
       <div className="position-box">
-        <span className="dim">Ваши LP-токены</span>
+        <span className="dim">{t('liq.yourLp')}</span>
         <span className="mono">{lp === null ? '…' : formatAmount(lp, 18, 6)}</span>
       </div>
 
       <div className="form-field">
-        <label>Сколько вывести</label>
+        <label>{t('liq.howMuch')}</label>
         <div className="pct-row">
           {[25, 50, 75, 100].map((p) => (
             <button
@@ -345,7 +343,7 @@ function RemoveV2({ pool, wallet, onDone }) {
               className={pct === p ? 'pct-btn active' : 'pct-btn'}
               onClick={() => setPct(p)}
             >
-              {p === 100 ? 'Всё' : `${p}%`}
+              {p === 100 ? t('liq.all') : `${p}%`}
             </button>
           ))}
         </div>
@@ -354,11 +352,11 @@ function RemoveV2({ pool, wallet, onDone }) {
       {out && (
         <div className="quote-details">
           <div className="detail-row">
-            <span>Получите {pool.token0.symbol}</span>
+            <span>{t('liq.receive', { symbol: pool.token0.symbol })}</span>
             <span className="mono">{formatAmount(out.r0, pool.token0.decimals, 6)}</span>
           </div>
           <div className="detail-row">
-            <span>Получите {pool.token1.symbol}</span>
+            <span>{t('liq.receive', { symbol: pool.token1.symbol })}</span>
             <span className="mono">{formatAmount(out.r1, pool.token1.decimals, 6)}</span>
           </div>
         </div>
@@ -375,12 +373,12 @@ function RemoveV2({ pool, wallet, onDone }) {
 
       <button className="primary-btn" disabled={liquidity === 0n || busy || blocked} onClick={remove}>
         {blocked
-          ? 'Операции заблокированы'
+          ? t('compliance.actionsBlocked')
           : busy
-            ? 'Выводим…'
+            ? t('liq.removing')
             : liquidity > 0n
-              ? 'Вывести ликвидность'
-              : 'Нет LP-токенов'}
+              ? t('liq.removeButton')
+              : t('liq.noLp')}
       </button>
     </div>
   )
@@ -396,6 +394,7 @@ function RemoveV2({ pool, wallet, onDone }) {
 // Цену задаём как «сколько token1 за 1 token0» — так это привычнее читать.
 // В контракт уходит sqrtPriceX96 = sqrt(price) * 2^96 с поправкой на decimals.
 export function SetPrice({ pool, wallet, onDone }) {
+  const { t } = useI18n()
   const compliance = wallet.compliance ?? {}
   const blocked = compliance.blocked ?? false
   const [price, setPrice] = useState('')
@@ -419,15 +418,15 @@ export function SetPrice({ pool, wallet, onDone }) {
     setBusy(true)
     setError(null)
     try {
-      setStatus('Подтвердите установку цены…')
+      setStatus(t('tx.confirmPrice'))
       const hash = await sendTransaction({
         to: pool.address,
         data: SEL.initializePrice + encUint(sqrtPrice),
         value: 0n,
       })
-      setStatus('Ждём подтверждения…')
+      setStatus(t('tx.waiting'))
       await waitForReceipt(hash)
-      setStatus('Цена установлена.')
+      setStatus(t('tx.priceSet'))
       onDone?.()
     } catch (e) {
       setError(e?.shortMessage || e?.message || String(e))
@@ -441,7 +440,10 @@ export function SetPrice({ pool, wallet, onDone }) {
     <>
       <div className="form-field">
         <label>
-          Начальная цена: сколько {pool.token1.symbol} за 1 {pool.token0.symbol}
+          {t('v3.initialPrice', {
+            token0: pool.token0.symbol,
+            token1: pool.token1.symbol,
+          })}
         </label>
         <div className="amount-wrap">
           <input
@@ -460,10 +462,7 @@ export function SetPrice({ pool, wallet, onDone }) {
         )}
       </div>
 
-      <Notice kind="warn">
-        Цену можно задать только один раз, и отменить это нельзя. Ставьте ту, что близка к
-        рыночной: если она будет ниже, кто-то сразу купит токен дешевле, чем он стоит.
-      </Notice>
+      <Notice kind="warn">{t('v3.priceOnce')}</Notice>
 
       {status && (
         <Notice kind="info">
@@ -478,7 +477,7 @@ export function SetPrice({ pool, wallet, onDone }) {
         disabled={!sqrtPrice || busy || !wallet.account || blocked}
         onClick={set}
       >
-        {blocked ? 'Операции заблокированы' : busy ? 'Устанавливаем…' : 'Установить цену'}
+        {blocked ? t('compliance.actionsBlocked') : busy ? t('v3.setting') : t('v3.setPrice')}
       </button>
     </>
   )
@@ -489,6 +488,7 @@ export function SetPrice({ pool, wallet, onDone }) {
 // ---------------------------------------------------------------------------
 
 function AddV3({ pool, wallet, onDone }) {
+  const { t } = useI18n()
   const compliance = wallet.compliance ?? {}
   const blocked = compliance.blocked ?? false
   const { account } = wallet
@@ -548,7 +548,7 @@ function AddV3({ pool, wallet, onDone }) {
     setBusy(true)
     setError(null)
     try {
-      setStatus('Подтвердите одобрение токенов…')
+      setStatus(t('tx.confirmApprove'))
       // V3-пул забирает токены сам через transferFrom, поэтому одобрение
       // выдаётся на адрес пула, а не роутера.
       await ensureAllowance({
@@ -564,7 +564,7 @@ function AddV3({ pool, wallet, onDone }) {
         amount: amountBig,
       })
 
-      setStatus('Подтвердите создание позиции…')
+      setStatus(t('tx.confirmMint'))
       const tx = buildMintV3({
         pool: pool.address,
         recipient: account,
@@ -573,9 +573,9 @@ function AddV3({ pool, wallet, onDone }) {
         liquidity,
       })
       const hash = await sendTransaction(tx)
-      setStatus('Ждём подтверждения…')
+      setStatus(t('tx.waiting'))
       await waitForReceipt(hash)
-      setStatus('Позиция создана.')
+      setStatus(t('tx.positionCreated'))
       onDone?.()
     } catch (e) {
       setError(e?.shortMessage || e?.message || String(e))
@@ -588,10 +588,7 @@ function AddV3({ pool, wallet, onDone }) {
   if (priceUnset) {
     return (
       <div className="card form-card">
-        <Notice kind="warn">
-          В этом пуле ещё не задана начальная цена. Без неё неизвестно, сколько токенов
-          соответствует диапазону, поэтому добавлять ликвидность нельзя.
-        </Notice>
+        <Notice kind="warn">{t('v3.priceUnsetWarning')}</Notice>
         <SetPrice pool={pool} wallet={wallet} onDone={onDone} />
       </div>
     )
@@ -600,7 +597,7 @@ function AddV3({ pool, wallet, onDone }) {
   return (
     <div className="card form-card">
       <div className="form-field">
-        <label>Диапазон цены</label>
+        <label>{t('v3.range')}</label>
         <div className="pct-row">
           {[1, 2, 5, 10, 50].map((r) => (
             <button
@@ -612,17 +609,14 @@ function AddV3({ pool, wallet, onDone }) {
             </button>
           ))}
         </div>
-        <p className="fine-print">
-          Узкий диапазон приносит больше комиссий на тот же капитал, но если цена выйдет за
-          границы, позиция перестанет зарабатывать и останется в одном токене.
-        </p>
+        <p className="fine-print">{t('v3.rangeHint')}</p>
       </div>
 
       <div className="form-field">
-        <label>Тики</label>
+        <label>{t('v3.ticks')}</label>
         <div className="tick-row mono">
-          <span>нижний: {ticks.lower}</span>
-          <span>верхний: {ticks.upper}</span>
+          <span>{t('v3.tickLower', { tick: ticks.lower })}</span>
+          <span>{t('v3.tickUpper', { tick: ticks.upper })}</span>
         </div>
       </div>
 
@@ -632,7 +626,7 @@ function AddV3({ pool, wallet, onDone }) {
         onChange={setAmount}
         balance={bal0}
         disabled={busy}
-        hint="Ориентировочная сумма в первом токене"
+        hint={t('v3.amountHint')}
       />
 
       {status && (
@@ -649,12 +643,12 @@ function AddV3({ pool, wallet, onDone }) {
         onClick={add}
       >
         {blocked
-          ? 'Операции заблокированы'
+          ? t('compliance.actionsBlocked')
           : !account
-            ? 'Сначала подключите кошелёк'
+            ? t('liq.connectFirst')
             : busy
-              ? 'Добавляем…'
-              : 'Создать позицию'}
+              ? t('liq.adding')
+              : t('v3.createPosition')}
       </button>
     </div>
   )
@@ -671,6 +665,7 @@ function AddV3({ pool, wallet, onDone }) {
 // Ввести неверный диапазон не опасно: readV3Position вернёт null, и кнопка
 // останется выключенной.
 function RemoveV3({ pool, wallet, onDone }) {
+  const { t } = useI18n()
   const compliance = wallet.compliance ?? {}
   const blocked = compliance.blocked ?? false
   const { account } = wallet
@@ -692,7 +687,7 @@ function RemoveV3({ pool, wallet, onDone }) {
     try {
       const p = await readV3Position(pool.address, account, lowerN, upperN)
       setPos(p)
-      if (!p) setError('По этому диапазону позиций не найдено.')
+      if (!p) setError(t('v3.noPositionFound'))
     } catch (e) {
       setError(e?.message || String(e))
     }
@@ -702,7 +697,7 @@ function RemoveV3({ pool, wallet, onDone }) {
     setBusy(true)
     setError(null)
     try {
-      setStatus('Подтвердите снятие ликвидности…')
+      setStatus(t('tx.confirmBurn'))
       const burnTx = buildBurnV3({
         pool: pool.address,
         tickLower: lowerN,
@@ -710,10 +705,10 @@ function RemoveV3({ pool, wallet, onDone }) {
         liquidity: pos.liquidity,
       })
       let hash = await sendTransaction(burnTx)
-      setStatus('Ждём подтверждения…')
+      setStatus(t('tx.waiting'))
       await waitForReceipt(hash)
 
-      setStatus('Забираем токены и комиссии…')
+      setStatus(t('tx.collecting'))
       const collectTx = buildCollectV3({
         pool: pool.address,
         recipient: account,
@@ -723,7 +718,7 @@ function RemoveV3({ pool, wallet, onDone }) {
       hash = await sendTransaction(collectTx)
       await waitForReceipt(hash)
 
-      setStatus('Средства выведены.')
+      setStatus(t('tx.fundsWithdrawn'))
       onDone?.()
     } catch (e) {
       setError(e?.shortMessage || e?.message || String(e))
@@ -736,7 +731,7 @@ function RemoveV3({ pool, wallet, onDone }) {
   if (!account) {
     return (
       <div className="card form-card">
-        <Notice kind="info">Подключите кошелёк, чтобы увидеть свою позицию.</Notice>
+        <Notice kind="info">{t('liq.connectToSee')}</Notice>
       </div>
     )
   }
@@ -744,11 +739,11 @@ function RemoveV3({ pool, wallet, onDone }) {
   return (
     <div className="card form-card">
       <div className="form-field">
-        <label>Диапазон позиции</label>
+        <label>{t('v3.positionRange')}</label>
         <div className="tick-inputs">
           <input
             className="search-input mono"
-            placeholder="нижний тик"
+            placeholder={t('v3.tickLowerPlaceholder')}
             inputMode="numeric"
             value={lower}
             onChange={(e) => {
@@ -758,7 +753,7 @@ function RemoveV3({ pool, wallet, onDone }) {
           />
           <input
             className="search-input mono"
-            placeholder="верхний тик"
+            placeholder={t('v3.tickUpperPlaceholder')}
             inputMode="numeric"
             value={upper}
             onChange={(e) => {
@@ -768,39 +763,38 @@ function RemoveV3({ pool, wallet, onDone }) {
           />
         </div>
         <p className="fine-print">
-          Диапазон указан в тиках — это те числа, что вы видели при создании позиции. Шаг тика
-          для этого пула: {pool.tickSpacing || 10}.
+          {t('v3.tickSpacingNote', { spacing: pool.tickSpacing || 10 })}
         </p>
       </div>
 
       <button className="ghost-btn" disabled={!validRange || busy} onClick={check}>
-        Проверить позицию
+        {t('v3.checkPosition')}
       </button>
 
-      {pos === null && <Notice kind="warn">По этому диапазону позиций нет.</Notice>}
+      {pos === null && <Notice kind="warn">{t('v3.noPositionInRange')}</Notice>}
 
       {pos && (
         <div className="quote-details">
           <div className="detail-row">
-            <span>Ликвидность</span>
+            <span>{t('v3.liquidity')}</span>
             <span className="mono">{pos.liquidity.toString()}</span>
           </div>
           <div className="detail-row">
-            <span>Комиссии {pool.token0.symbol}</span>
+            <span>{t('v3.fees', { symbol: pool.token0.symbol })}</span>
             <span className="mono">{formatAmount(pos.tokensOwed0, pool.token0.decimals, 6)}</span>
           </div>
           <div className="detail-row">
-            <span>Комиссии {pool.token1.symbol}</span>
+            <span>{t('v3.fees', { symbol: pool.token1.symbol })}</span>
             <span className="mono">{formatAmount(pos.tokensOwed1, pool.token1.decimals, 6)}</span>
           </div>
           {(pos.pending0 > 0n || pos.pending1 > 0n) && (
             <>
               <div className="detail-row">
-                <span>Отлеживается {pool.token0.symbol}</span>
+                <span>{t('v3.pending', { symbol: pool.token0.symbol })}</span>
                 <span className="mono">{formatAmount(pos.pending0, pool.token0.decimals, 6)}</span>
               </div>
               <div className="detail-row">
-                <span>Отлеживается {pool.token1.symbol}</span>
+                <span>{t('v3.pending', { symbol: pool.token1.symbol })}</span>
                 <span className="mono">{formatAmount(pos.pending1, pool.token1.decimals, 6)}</span>
               </div>
             </>
@@ -809,11 +803,7 @@ function RemoveV3({ pool, wallet, onDone }) {
       )}
 
       {pos && (pos.pending0 > 0n || pos.pending1 > 0n) && (
-        <Notice kind="info">
-          Часть комиссии ещё отлеживается до блока {pos.vestBlock.toString()} — это защита от
-          JIT-ботов. Она станет доступной после этого блока, но только если вы не снимете
-          ликвидность раньше: досрочное снятие сжигает соразмерную долю отлеживающегося.
-        </Notice>
+        <Notice kind="info">{t('v3.vestNotice', { block: pos.vestBlock.toString() })}</Notice>
       )}
 
       {status && (
@@ -825,7 +815,11 @@ function RemoveV3({ pool, wallet, onDone }) {
       {blocked && <Notice kind="error">{compliance.reason}</Notice>}
 
       <button className="primary-btn" disabled={!pos || busy || blocked} onClick={withdraw}>
-        {blocked ? 'Операции заблокированы' : busy ? 'Выводим…' : 'Забрать всё'}
+        {blocked
+          ? t('compliance.actionsBlocked')
+          : busy
+            ? t('liq.removing')
+            : t('v3.collectAll')}
       </button>
     </div>
   )
@@ -836,6 +830,7 @@ function RemoveV3({ pool, wallet, onDone }) {
 // ---------------------------------------------------------------------------
 
 function AmountField({ token, value, onChange, balance, disabled, hint }) {
+  const { t } = useI18n()
   return (
     <div className="form-field">
       <div className="field-head">
@@ -846,7 +841,7 @@ function AmountField({ token, value, onChange, balance, disabled, hint }) {
             onClick={() => onChange(formatAmount(balance, token.decimals, 8, { group: false }))}
             disabled={disabled}
           >
-            макс: {formatAmount(balance, token.decimals, 4)}
+            {t('v3.max', { amount: formatAmount(balance, token.decimals, 4) })}
           </button>
         )}
       </div>

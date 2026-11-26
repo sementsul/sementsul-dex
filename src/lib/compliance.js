@@ -97,13 +97,24 @@ export function isBlockedRegion({ country, region, regionCode } = {}) {
 
 /// Итоговое решение по геолокации.
 ///
-/// Возвращает { blocked, kind, title, message }, где kind — 'country' или
-/// 'region', чтобы интерфейс мог показать разный текст. Если данных нет
+/// Возвращает { blocked, kind, country, title, message }, где kind — 'country'
+/// или 'region', чтобы интерфейс мог показать разный текст. Если данных нет
 /// (эндпоинт недоступен, локальная разработка), возвращает blocked: false:
 /// блокировать весь сайт из-за сбоя нашего же API нельзя.
-export function evaluateGeo(geo) {
+///
+/// Второй аргумент — необязательная функция перевода t(key, params) из i18n.
+/// Если её не передать, тексты будут русскими: этот модуль используется и в
+/// тестах, где никакого React-контекста нет, и молча отдавать ключи вместо
+/// текста было бы хуже.
+///
+/// Поле `country` (код) возвращается всегда, независимо от языка: по нему
+/// интерфейс может показать название страны на своём языке, не разбирая
+/// готовое сообщение.
+export function evaluateGeo(geo, t = null) {
+  const tr = typeof t === 'function' ? t : (key, params) => fallbackGeoText(key, params)
+
   if (!geo || typeof geo !== 'object') {
-    return { blocked: false, kind: null, title: null, message: null }
+    return { blocked: false, kind: null, country: null, title: null, message: null }
   }
 
   const name = blockedCountryName(geo.country)
@@ -111,10 +122,9 @@ export function evaluateGeo(geo) {
     return {
       blocked: true,
       kind: 'country',
-      title: 'Доступ ограничен',
-      message:
-        `Сервис недоступен из этой юрисдикции (${name}). ` +
-        'Это ограничение связано с санкционными требованиями США и ЕС и не зависит от вашего кошелька.',
+      country: String(geo.country).toUpperCase(),
+      title: tr('blocked.title'),
+      message: tr('blocked.msgCountry', { name: localizedCountryName(geo.country, name, t) }),
     }
   }
 
@@ -122,15 +132,56 @@ export function evaluateGeo(geo) {
     return {
       blocked: true,
       kind: 'region',
-      title: 'Доступ ограничен',
-      message:
-        'Сервис недоступен из этого региона. Ограничение связано с санкционными ' +
-        'требованиями США и ЕС. Если вы считаете, что это ошибка определения ' +
-        'местоположения, напишите в репозиторий проекта.',
+      country: 'UA',
+      title: tr('blocked.title'),
+      message: tr('blocked.msgRegion'),
     }
   }
 
-  return { blocked: false, kind: null, title: null, message: null }
+  return { blocked: false, kind: null, country: null, title: null, message: null }
+}
+
+/// Названия стран для английского интерфейса. На русском берём из
+/// BLOCKED_COUNTRIES — там уже написано «Иран», «КНДР» и так далее.
+const COUNTRY_EN = {
+  IR: 'Iran',
+  KP: 'North Korea',
+  SY: 'Syria',
+  CU: 'Cuba',
+}
+
+function localizedCountryName(code, ruName, t) {
+  // Язык определяем по тому, что вернул переводчик для известного ключа.
+  // Это единственный надёжный признак: сам модуль про язык ничего не знает.
+  if (typeof t === 'function') {
+    const probe = t('lang.en')
+    if (probe === 'English' || probe === 'EN') {
+      return COUNTRY_EN[String(code).toUpperCase()] ?? ruName
+    }
+  }
+  return ruName
+}
+
+/// Русские тексты для случая, когда переводчик не передан (тесты, скрипты).
+/// Дублирует словарь намеренно: модуль не должен тянуть React ради двух строк.
+function fallbackGeoText(key, params) {
+  switch (key) {
+    case 'blocked.title':
+      return 'Доступ ограничен'
+    case 'blocked.msgCountry':
+      return (
+        `Сервис недоступен из этой юрисдикции (${params?.name}). ` +
+        'Это ограничение связано с санкционными требованиями США и ЕС и не зависит от вашего кошелька.'
+      )
+    case 'blocked.msgRegion':
+      return (
+        'Сервис недоступен из этого региона. Ограничение связано с санкционными ' +
+        'требованиями США и ЕС. Если вы считаете, что это ошибка определения ' +
+        'местоположения, напишите в репозиторий проекта.'
+      )
+    default:
+      return key
+  }
 }
 
 // ---------- санкционный список ----------
@@ -199,11 +250,27 @@ export async function checkAddress(address) {
 }
 
 /// Человекочитаемая причина блокировки адреса.
-export function describeAddressBlock(entry) {
+///
+/// Имена и названия программ (LAZARUS GROUP, DPRK3) не переводятся: это
+/// официальные обозначения из списка OFAC, и их вольный перевод сделал бы
+/// сообщение бесполезным для сверки с первоисточником.
+export function describeAddressBlock(entry, t = null) {
   const names = entry?.names?.filter(Boolean) ?? []
   const programs = entry?.programs?.filter(Boolean) ?? []
 
-  const who = names.length ? names.join(', ') : 'запись в списке OFAC'
-  const why = programs.length ? ` (программа: ${programs.join(', ')})` : ''
+  const who = names.length
+    ? names.join(', ')
+    : t
+      ? t('blocked.ofacEntry')
+      : 'запись в списке OFAC'
+  const why = programs.length
+    ? t
+      ? t('blocked.ofacProgram', { programs: programs.join(', ') })
+      : ` (программа: ${programs.join(', ')})`
+    : ''
+
+  if (typeof t === 'function') {
+    return t('blocked.addressListed', { who, why })
+  }
   return `Адрес внесён в санкционный список OFAC: ${who}${why}. Операции с этого адреса заблокированы.`
 }

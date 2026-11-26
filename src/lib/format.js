@@ -92,9 +92,19 @@ export function formatBps(bps) {
   return `${(bps / 100).toFixed(bps < 100 ? 2 : 1)}%`
 }
 
-// Длительность в секундах -> "2 мин"
-export function formatDuration(sec) {
-  if (sec < 60) return `${sec} сек`
-  if (sec < 3600) return `${Math.round(sec / 60)} мин`
-  return `${Math.round(sec / 3600)} ч`
+// Длительность в секундах -> "2 мин".
+//
+// Второй аргумент — необязательная функция перевода. Без неё отдаём русские
+// сокращения: функция используется и в тестах, и в скриптах, где контекста
+// языка нет.
+export function formatDuration(sec, t = null) {
+  const tr = typeof t === 'function' ? t : (key, params) => {
+    const n = params?.n ?? ''
+    if (key === 'dur.sec') return `${n} сек`
+    if (key === 'dur.min') return `${n} мин`
+    return `${n} ч`
+  }
+  if (sec < 60) return tr('dur.sec', { n: sec })
+  if (sec < 3600) return tr('dur.min', { n: Math.round(sec / 60) })
+  return tr('dur.hour', { n: Math.round(sec / 3600) })
 }

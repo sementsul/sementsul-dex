@@ -9,16 +9,20 @@ import { useEffect, useState } from 'react'
 import { fetchRecentTrades, isIndexerAvailable } from '../lib/indexer.js'
 import { TRADES_POOL, TRADES_PAIR_LABEL } from '../lib/chain.js'
 import { formatPrice } from '../lib/format.js'
+import { useI18n } from '../lib/useI18n.jsx'
 
-function timeAgo(unixSec) {
+// Относительное время. t передаём снаружи: функция вызывается из рендера, а
+// не является компонентом, поэтому хук внутри неё взять нельзя.
+function timeAgo(unixSec, t) {
   const diff = Math.floor(Date.now() / 1000) - unixSec
-  if (diff < 60) return 'только что'
-  if (diff < 3600) return `${Math.floor(diff / 60)} мин назад`
-  if (diff < 86400) return `${Math.floor(diff / 3600)} ч назад`
-  return `${Math.floor(diff / 86400)} дн назад`
+  if (diff < 60) return t('trades.justNow')
+  if (diff < 3600) return t('trades.minAgo', { n: Math.floor(diff / 60) })
+  if (diff < 86400) return t('trades.hourAgo', { n: Math.floor(diff / 3600) })
+  return t('trades.dayAgo', { n: Math.floor(diff / 86400) })
 }
 
 export default function RecentTrades() {
+  const { t } = useI18n()
   const [state, setState] = useState({ status: 'loading', trades: [], error: null })
 
   useEffect(() => {
@@ -66,17 +70,17 @@ export default function RecentTrades() {
   return (
     <div className="card trades-card">
       <div className="trades-head">
-        <h2>Последние сделки</h2>
+        <h2>{t('trades.title')}</h2>
         <span className="trades-pair">{TRADES_PAIR_LABEL}</span>
       </div>
 
       {state.status === 'loading' && (
-        <div className="trades-empty">Загружаем историю…</div>
+        <div className="trades-empty">{t('trades.loading')}</div>
       )}
 
       {state.status === 'ready' && (
         <div className="trades-list">
-          {state.trades.map((t) => {
+          {state.trades.map((tr) => {
             // В базе цена лежит как token1 за token0, то есть WBNB за 1 USDT
             // (около 0.0018). На экране нужна привычная цена — USDT за 1 WBNB,
             // поэтому переворачиваем её один раз здесь.
@@ -85,26 +89,26 @@ export default function RecentTrades() {
             // уже нормализована по направлению. Из-за этого половина строк
             // показывала 0.0018, а половина — 540, и подпись «BNB» не имела
             // отношения ни к одной из них.
-            const usdtPerBnb = t.price > 0 ? 1 / t.price : 0
+            const usdtPerBnb = tr.price > 0 ? 1 / tr.price : 0
 
             // zeroForOne = вход в token0, то есть USDT -> WBNB: покупают WBNB.
-            const buying = t.zeroForOne
+            const buying = tr.zeroForOne
 
             return (
               <a
-                key={`${t.txHash}-${t.block}`}
+                key={`${tr.txHash}-${tr.block}`}
                 className="trade-row"
-                href={`https://bscscan.com/tx/${t.txHash}`}
+                href={`https://bscscan.com/tx/${tr.txHash}`}
                 target="_blank"
                 rel="noreferrer"
               >
                 <span className={`trade-dir ${buying ? 'buy' : 'sell'}`}>
-                  {buying ? 'Покупка' : 'Продажа'}
+                  {buying ? t('trades.buy') : t('trades.sell')}
                 </span>
                 <span className="trade-price mono">
                   {formatPrice(usdtPerBnb)} USDT
                 </span>
-                <span className="trade-time">{timeAgo(t.ts)}</span>
+                <span className="trade-time">{timeAgo(tr.ts, t)}</span>
               </a>
             )
           })}

@@ -27,7 +27,7 @@ async function fetchGeo() {
   }
 }
 
-export function useCompliance(account) {
+export function useCompliance(account, t = null) {
   const [geo, setGeo] = useState(null)
   const [geoLoaded, setGeoLoaded] = useState(false)
   const [addressCheck, setAddressCheck] = useState({
@@ -84,10 +84,10 @@ export function useCompliance(account) {
     }
   }, [account])
 
-  const geoDecision = useMemo(() => evaluateGeo(geo), [geo])
+  const geoDecision = useMemo(() => evaluateGeo(geo, t), [geo, t])
 
   const addressBlocked = addressCheck.status === 'listed'
-  const addressMessage = addressBlocked ? describeAddressBlock(addressCheck.entry) : null
+  const addressMessage = addressBlocked ? describeAddressBlock(addressCheck.entry, t) : null
 
   // Итог: можно ли писать в блокчейн.
   //

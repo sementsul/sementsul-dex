@@ -7,10 +7,29 @@
 //
 // Текст намеренно объясняет причину. «403 Forbidden» без пояснения человек
 // примет за поломку сайта и пойдёт искать обход, а не поймёт ограничение.
+//
+// Язык берём из контекста, а не из браузера напрямую: пользователь мог
+// переключить его вручную, и экран блокировки обязан это уважать.
 
 import { BLOCKED_COUNTRIES } from '../lib/compliance.js'
+import { useI18n } from '../lib/useI18n.jsx'
 
 export default function BlockedScreen({ title, message, kind }) {
+  const { lang, t } = useI18n()
+
+  // Названия стран хранятся в compliance.js по-русски. Для английского
+  // интерфейса подставляем свои: список короткий, и держать его рядом с
+  // текстом проще, чем тащить в словарь ещё один слой.
+  const COUNTRY_EN = {
+    IR: 'Iran',
+    KP: 'North Korea',
+    SY: 'Syria',
+    CU: 'Cuba',
+  }
+  const names = Object.entries(BLOCKED_COUNTRIES).map(
+    ([code, ru]) => (lang === 'en' ? COUNTRY_EN[code] ?? ru : ru)
+  )
+
   return (
     <div className="app">
       <div className="blocked-wrap">
@@ -19,36 +38,23 @@ export default function BlockedScreen({ title, message, kind }) {
             ⛔
           </div>
 
-          <h1 className="blocked-title">{title ?? 'Доступ ограничен'}</h1>
+          <h1 className="blocked-title">{title ?? t('blocked.title')}</h1>
 
           <p className="blocked-text">{message}</p>
 
           {kind === 'country' && (
-            <p className="blocked-note">
-              Ограничение действует по стране подключения и не зависит от вашего
-              кошелька или активов. Список юрисдикций: {Object.values(BLOCKED_COUNTRIES).join(', ')}.
-            </p>
+            <p className="blocked-note">{t('blocked.countryNote', { list: names.join(', ') })}</p>
           )}
 
-          {kind === 'region' && (
-            <p className="blocked-note">
-              Регион определён по IP-адресу. Если это ошибка, сообщите об этом в
-              репозиторий проекта — определение по региону работает по названию
-              области и может ошибаться.
-            </p>
-          )}
+          {kind === 'region' && <p className="blocked-note">{t('blocked.regionNote')}</p>}
 
           <div className="blocked-links">
             <a href="https://github.com/sementsul/sementsul-dex" target="_blank" rel="noreferrer">
-              Репозиторий проекта
+              {t('blocked.repo')}
             </a>
           </div>
 
-          <p className="blocked-legal">
-            Sementsul DEX — некастодиальный интерфейс к смарт-контрактам в BNB
-            Chain. Контракты остаются общедоступными и не контролируются этим
-            сайтом; ограничение относится к использованию интерфейса.
-          </p>
+          <p className="blocked-legal">{t('blocked.legal')}</p>
         </div>
       </div>
     </div>

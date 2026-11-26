@@ -1,17 +1,28 @@
 import { useMemo, useState } from 'react'
 import { ARTICLES, searchArticles } from '../lib/knowledge.js'
+import { ARTICLES_EN, searchArticlesEn } from '../lib/knowledge.en.js'
+import { useI18n } from '../lib/useI18n.jsx'
 
 // База знаний: список статей и просмотр одной.
 //
 // Держим в одном компоненте, потому что переход между списком и статьёй —
 // это состояние, а не маршрут: отдельная страница на каждую статью означала бы
 // настройку роутера и ломала бы обновление по якорю.
+//
+// Статьи лежат двумя массивами, а не в словаре ui-строк: это длинные тексты
+// со своей структурой (разделы, абзацы), и держать их рядом с подписями к
+// кнопкам значило бы получить нечитаемый файл. Язык выбирает тот же ключ,
+// что и весь интерфейс, поэтому база знаний не может «отстать» от него.
 export default function KnowledgePage() {
+  const { lang, t } = useI18n()
   const [query, setQuery] = useState('')
   const [openId, setOpenId] = useState(null)
 
-  const results = useMemo(() => searchArticles(query), [query])
-  const open = openId ? ARTICLES.find((a) => a.id === openId) : null
+  const articles = lang === 'en' ? ARTICLES_EN : ARTICLES
+  const search = lang === 'en' ? searchArticlesEn : searchArticles
+
+  const results = useMemo(() => search(query), [query, search])
+  const open = openId ? articles.find((a) => a.id === openId) : null
 
   if (open) {
     return <Article article={open} onBack={() => setOpenId(null)} />
@@ -21,25 +32,23 @@ export default function KnowledgePage() {
     <div className="page">
       <div className="page-head">
         <div>
-          <h1 className="page-title">База знаний</h1>
-          <p className="page-sub">
-            Как работает биржа, откуда берётся доход и что может пойти не так.
-          </p>
+          <h1 className="page-title">{t('kb.title')}</h1>
+          <p className="page-sub">{t('kb.sub')}</p>
         </div>
       </div>
 
       <input
         className="search-input"
-        placeholder="Поиск по статьям"
+        placeholder={t('kb.searchPlaceholder')}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
 
       {results.length === 0 ? (
         <div className="empty-state">
-          <p>По запросу «{query}» ничего не нашлось.</p>
+          <p>{t('kb.nothingFound', { query })}</p>
           <button className="ghost-btn" onClick={() => setQuery('')}>
-            Сбросить поиск
+            {t('kb.resetSearch')}
           </button>
         </div>
       ) : (
@@ -49,9 +58,9 @@ export default function KnowledgePage() {
               <span className="kb-item-head">
                 <span className="kb-item-title">{a.title}</span>
                 <span className="kb-tags">
-                  {a.tags.map((t) => (
-                    <span key={t} className="kb-tag">
-                      {t}
+                  {a.tags.map((tag) => (
+                    <span key={tag} className="kb-tag">
+                      {tag}
                     </span>
                   ))}
                 </span>
@@ -95,19 +104,21 @@ function linkify(text) {
 }
 
 function Article({ article, onBack }) {
+  const { t } = useI18n()
+
   return (
     <div className="page">
       <button className="back-btn" onClick={onBack}>
-        ← Все статьи
+        {t('kb.backToAll')}
       </button>
 
       <h1 className="page-title">{article.title}</h1>
       <p className="page-sub">{article.summary}</p>
 
       <div className="kb-tags" style={{ marginBottom: 20 }}>
-        {article.tags.map((t) => (
-          <span key={t} className="kb-tag">
-            {t}
+        {article.tags.map((tag) => (
+          <span key={tag} className="kb-tag">
+            {tag}
           </span>
         ))}
       </div>

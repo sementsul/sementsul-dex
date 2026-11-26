@@ -5,6 +5,9 @@
 // Здесь же живёт комплаенс-гейт: проверка геолокации и санкционного списка.
 // Он регистрируется в wallet.js, поэтому блокирует ЛЮБУЮ транзакцию, а не
 // только ту, до которой добрался обработчик кнопки.
+//
+// Хук зависит от контекста языка: причина блокировки показывается человеку,
+// значит должна быть на его языке. Ошибка подключения тоже берётся из словаря.
 
 import { useCallback, useEffect, useState } from 'react'
 import {
@@ -19,14 +22,16 @@ import {
 } from '../lib/wallet.js'
 import { CHAIN_ID } from '../lib/chain.js'
 import { useCompliance } from './useCompliance.js'
+import { useI18n } from './useI18n.jsx'
 
 export function useWallet() {
+  const { t } = useI18n()
   const [account, setAccount] = useState(null)
   const [chainId, setChainId] = useState(null)
   const [available, setAvailable] = useState(false)
   const [error, setError] = useState(null)
 
-  const compliance = useCompliance(account)
+  const compliance = useCompliance(account, t)
 
   // Регистрируем гейт в модуле кошелька. Эффект зависит от assertAllowed,
   // поэтому при смене адреса или загрузке списка гейт обновляется сам.
@@ -71,10 +76,10 @@ export function useWallet() {
       }
       return res
     } catch (e) {
-      setError(e?.message ?? 'Не удалось подключить кошелёк')
+      setError(e?.message ?? t('err.walletConnect'))
       throw e
     }
-  }, [])
+  }, [t])
 
   const disconnectWallet = useCallback(() => {
     disconnect()

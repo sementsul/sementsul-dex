@@ -3,19 +3,22 @@ import SwapCard from './components/SwapCard.jsx'
 import RecentTrades from './components/RecentTrades.jsx'
 import PoolsPage from './components/PoolsPage.jsx'
 import KnowledgePage from './components/KnowledgePage.jsx'
+import TermsPage from './components/TermsPage.jsx'
 import BlockedScreen from './components/BlockedScreen.jsx'
 import { useWallet } from './lib/useWallet.js'
+import { useI18n } from './lib/useI18n.jsx'
 import { shortAddress } from './lib/format.js'
 import { CHAIN_ID } from './lib/chain.js'
 
 const TABS = [
-  { id: 'swap', label: 'Обмен' },
-  { id: 'pools', label: 'Пулы' },
-  { id: 'kb', label: 'База знаний' },
+  { id: 'swap', key: 'nav.swap' },
+  { id: 'pools', key: 'nav.pools' },
+  { id: 'kb', key: 'nav.kb' },
 ]
 
 export default function App() {
   const wallet = useWallet()
+  const { lang, setLang, t } = useI18n()
   const [tab, setTab] = useState('swap')
   const compliance = wallet.compliance
 
@@ -42,41 +45,70 @@ export default function App() {
         </div>
 
         <nav className="nav">
-          {TABS.map((t) => (
+          {TABS.map((item) => (
             <button
-              key={t.id}
-              className={tab === t.id ? 'nav-tab active' : 'nav-tab'}
-              onClick={() => setTab(t.id)}
+              key={item.id}
+              className={tab === item.id ? 'nav-tab active' : 'nav-tab'}
+              onClick={() => setTab(item.id)}
             >
-              {t.label}
+              {t(item.key)}
             </button>
           ))}
+          <button
+            className={tab === 'terms' ? 'nav-tab active' : 'nav-tab'}
+            onClick={() => setTab('terms')}
+          >
+            {t('nav.terms')}
+          </button>
         </nav>
+
+        {/* Переключатель языка. Две кнопки, а не выпадающий список: языков
+            два, и лишний клик по выпадашке здесь ни к чему. */}
+        <div className="lang-switch" role="group" aria-label={t('lang.label')}>
+          <button
+            className={lang === 'ru' ? 'lang-btn active' : 'lang-btn'}
+            onClick={() => setLang('ru')}
+            aria-pressed={lang === 'ru'}
+          >
+            RU
+          </button>
+          <button
+            className={lang === 'en' ? 'lang-btn active' : 'lang-btn'}
+            onClick={() => setLang('en')}
+            aria-pressed={lang === 'en'}
+          >
+            EN
+          </button>
+        </div>
 
         {wallet.available ? (
           wallet.account ? (
             <button
               className="wallet-btn connected"
               onClick={wallet.disconnect}
-              title="Нажмите, чтобы отключить"
+              title={t('wallet.disconnectHint')}
             >
               <span className="dot" />
               <span className="mono">{shortAddress(wallet.account)}</span>
               {wallet.wrongChain && (
-                <span style={{ color: 'var(--red)', fontSize: 11, fontWeight: 700 }}>НЕ ТА СЕТЬ</span>
+                <span style={{ color: 'var(--red)', fontSize: 11, fontWeight: 700 }}>
+                  {t('wallet.wrongChain')}
+                </span>
               )}
               {compliance.addressBlocked && (
-                <span style={{ color: 'var(--red)', fontSize: 11, fontWeight: 700 }}>ЗАБЛОКИРОВАН</span>
+                <span style={{ color: 'var(--red)', fontSize: 11, fontWeight: 700 }}>
+                  {t('wallet.blocked')}
+                </span>
               )}
             </button>
           ) : (
             <button className="wallet-btn" onClick={wallet.connect}>
-              Подключить кошелёк
+              {t('wallet.connect')}
             </button>
           )
         ) : (
           <a className="wallet-btn" href="https://metamask.io/download/" target="_blank" rel="noreferrer">
-            Установить MetaMask
+            {t('wallet.install')}
           </a>
         )}
       </header>
@@ -86,7 +118,7 @@ export default function App() {
           только операции, и причина видна всегда, а не только при клике. */}
       {compliance.addressBlocked && (
         <div className="compliance-banner" role="alert">
-          <strong>Операции заблокированы.</strong> {compliance.addressMessage}
+          <strong>{t('compliance.blockedTitle')}</strong> {compliance.addressMessage}
         </div>
       )}
 
@@ -94,8 +126,7 @@ export default function App() {
           выполнялась, вместо того чтобы молча пропустить адрес. */}
       {compliance.sanctionsUnavailable && !compliance.addressBlocked && (
         <div className="compliance-banner warn" role="status">
-          Список санкций не загрузился, проверка адреса не выполнялась. Операции
-          доступны; проверка по юрисдикции работает как обычно.
+          {t('compliance.sanctionsUnavailable')}
         </div>
       )}
 
@@ -108,6 +139,7 @@ export default function App() {
         )}
         {tab === 'pools' && <PoolsPage wallet={wallet} />}
         {tab === 'kb' && <KnowledgePage />}
+        {tab === 'terms' && <TermsPage onBack={() => setTab('swap')} />}
       </main>
 
       <footer className="footer">
@@ -115,9 +147,12 @@ export default function App() {
           <a href="https://bscscan.com" target="_blank" rel="noreferrer">
             BscScan
           </a>
+          <button className="footer-link-btn" onClick={() => setTab('terms')}>
+            {t('nav.terms')}
+          </button>
         </div>
-        <div>Расчёт маршрута и цены выполняется в браузере. Транзакции подписывает ваш кошелёк.</div>
-        <div style={{ marginTop: 6, fontSize: 11 }}>Chain ID {CHAIN_ID} · BNB Smart Chain</div>
+        <div>{t('footer.routeNote')}</div>
+        <div style={{ marginTop: 6, fontSize: 11 }}>{t('footer.chain', { id: CHAIN_ID })}</div>
       </footer>
     </div>
   )

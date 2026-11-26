@@ -12,11 +12,13 @@ import { formatAmount, parseAmount, formatBps } from '../lib/format.js'
 import { sendTransaction, waitForReceipt, switchToBsc, getNativeBalance } from '../lib/wallet.js'
 import { SEL, encAddress, encUint } from '../lib/abi.js'
 import { TokenIcon, TokenPicker, RouteBadges, ImpactBar, Spinner, Notice } from './ui.jsx'
+import { useI18n } from '../lib/useI18n.jsx'
 
 const SLIPPAGE_OPTIONS = [10, 50, 100] // 0.1%, 0.5%, 1%
 const MAX_UINT256 = (1n << 256n) - 1n
 
 export default function SwapCard({ wallet }) {
+  const { t } = useI18n()
   const { account, chainId, available, connect, wrongChain, compliance } = wallet
   const blocked = compliance?.blocked ?? false
 
@@ -121,21 +123,21 @@ export default function SwapCard({ wallet }) {
         if (seq !== quoteSeq.current) return
         if (!r) {
           setRoute(null)
-          setQuoteError('Маршрут не найден: нет пула с достаточной ликвидностью')
+          setQuoteError(t('err.noRoutePool'))
         } else {
           setRoute(r)
         }
       } catch (e) {
         if (seq !== quoteSeq.current) return
         setRoute(null)
-        setQuoteError(e?.message ?? 'Ошибка котирования')
+        setQuoteError(e?.message ?? t('err.quote'))
       } finally {
         if (seq === quoteSeq.current) setQuoting(false)
       }
     }, 350)
 
     return () => clearTimeout(timer)
-  }, [tokenIn, tokenOut, amountIn])
+  }, [tokenIn, tokenOut, amountIn, t])
 
   // ---------- allowance ----------
 
@@ -186,9 +188,9 @@ export default function SwapCard({ wallet }) {
       setTxState({ status: 'success', hash, error: null })
       setAllowance(MAX_UINT256)
     } catch (e) {
-      setTxState({ status: 'error', hash: null, error: friendlyError(e) })
+      setTxState({ status: 'error', hash: null, error: friendlyError(e, t) })
     }
-  }, [tokenIn, spender])
+  }, [tokenIn, spender, t])
 
   const handleSwap = useCallback(async () => {
     if (!route || !account) return
@@ -215,7 +217,7 @@ export default function SwapCard({ wallet }) {
       setTxState({
         status: 'error',
         hash: null,
-        error: 'Этот маршрут требует Universal Router — пока не поддерживается',
+        error: t('err.universalRouter'),
       })
       return
     }
@@ -226,16 +228,16 @@ export default function SwapCard({ wallet }) {
       setTxState({ status: 'pending', hash, error: null })
       const receipt = await waitForReceipt(hash)
       if (receipt.status === '0x0') {
-        setTxState({ status: 'error', hash, error: 'Транзакция отменена сетью (revert)' })
+        setTxState({ status: 'error', hash, error: t('err.reverted') })
       } else {
         setTxState({ status: 'success', hash, error: null })
         setAmountInStr('')
         setRoute(null)
       }
     } catch (e) {
-      setTxState({ status: 'error', hash: null, error: friendlyError(e) })
+      setTxState({ status: 'error', hash: null, error: friendlyError(e, t) })
     }
-  }, [route, account, tokenIn, tokenOut, slippageBps, compliance])
+  }, [route, account, tokenIn, tokenOut, slippageBps, compliance, t])
 
   const handleSwitchTokens = useCallback(() => {
     setTokenIn(tokenOut)
@@ -255,11 +257,11 @@ export default function SwapCard({ wallet }) {
   const handleAddToken = useCallback(
     async (address) => {
       const meta = await readTokenMeta(address).catch((e) => {
-        throw new Error(`Не удалось прочитать токен: ${e?.message ?? 'ошибка сети'}`)
+        throw new Error(t('token.readFailed', { error: e?.message ?? t('token.networkError') }))
       })
-      if (!meta) throw new Error('По этому адресу нет ERC-20 токена')
+      if (!meta) throw new Error(t('token.notErc20'))
       if (!meta.symbol || meta.symbol === '???') {
-        throw new Error('Контракт не отдаёт symbol() — это не обычный ERC-20')
+        throw new Error(t('token.noSymbol'))
       }
       const token = {
         address,
@@ -290,41 +292,48 @@ export default function SwapCard({ wallet }) {
   const buttonState = (() => {
     if (!available) {
       return {
-        label: 'Установить MetaMask',
+        label: t('wallet.install'),
         disabled: false,
         href: 'https://metamask.io/download/',
       }
     }
-    if (!account) return { label: 'Подключить кошелёк', disabled: false, onClick: connect }
+    if (!account) return { label: t('wallet.connect'), disabled: false, onClick: connect }
 
     // Комплаенс-блокировка идёт раньше всех прочих проверок: показывать
     // «введите сумму» заблокированному пользователю бессмысленно и выглядит
     // как издевательство. Проверка дублирует гейт в sendTransaction, но там
     // она сработала бы уже после нажатия — здесь кнопка просто не работает.
-    if (blocked) return { label: 'Операции заблокированы', disabled: true, blocked: true }
+    if (blocked) return { label: t('compliance.actionsBlocked'), disabled: true, blocked: true }
 
     if (wrongChain) {
       return {
-        label: 'Переключиться на BNB Chain',
+        label: t('btn.switchChain'),
         disabled: false,
         onClick: () => switchToBsc().catch(() => {}),
       }
     }
-    if (amountIn <= 0n) return { label: 'Введите сумму', disabled: true }
-    if (quoting) return { label: 'Считаем маршрут…', disabled: true, spinner: true }
-    if (quoteError) return { label: 'Маршрут не найден', disabled: true }
-    if (insufficientBalance) return { label: `Недостаточно ${tokenIn.symbol}`, disabled: true }
+    if (amountIn <= 0n) return { label: t('btn.enterAmount'), disabled: true }
+    if (quoting) return { label: t('btn.quoting'), disabled: true, spinner: true }
+    if (quoteError) return { label: t('btn.noRoute'), disabled: true }
+    if (insufficientBalance) {
+      return { label: t('btn.insufficient', { symbol: tokenIn.symbol }), disabled: true }
+    }
     if (needsApproval) {
-      return { label: `Разрешить ${tokenIn.symbol}`, disabled: false, onClick: handleApprove, approve: true }
+      return {
+        label: t('btn.approve', { symbol: tokenIn.symbol }),
+        disabled: false,
+        onClick: handleApprove,
+        approve: true,
+      }
     }
     if (txState.status === 'pending') {
       return {
-        label: txState.hash ? 'Подтверждаем…' : 'Ожидание в кошельке…',
+        label: txState.hash ? t('btn.confirming') : t('btn.waitingWallet'),
         disabled: true,
         spinner: true,
       }
     }
-    return { label: 'Обменять', disabled: !route, onClick: handleSwap }
+    return { label: t('btn.swap'), disabled: !route, onClick: handleSwap }
   })()
 
   const feeBps = route ? routeFeeBps(route) : 0
@@ -343,7 +352,7 @@ export default function SwapCard({ wallet }) {
     <>
       <div className="card">
         <div className="swap-head">
-          <h1>Обмен</h1>
+          <h1>{t('swap.title')}</h1>
           <button className="settings-toggle" onClick={() => setShowSettings((v) => !v)}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="3" />
@@ -370,7 +379,7 @@ export default function SwapCard({ wallet }) {
         {/* вход */}
         <div className="token-box">
           <div className="token-box-head">
-            <span>Отдаёте</span>
+            <span>{t('swap.youPay')}</span>
           </div>
           <div className="token-box-body">
             <input
@@ -394,16 +403,19 @@ export default function SwapCard({ wallet }) {
           <div className="balance-row">
             <span>
               {account
-                ? `Баланс: ${balances[tokenIn.address.toLowerCase()] ?? '—'} ${tokenIn.symbol}`
+                ? t('swap.balance', {
+                    amount: balances[tokenIn.address.toLowerCase()] ?? '—',
+                    symbol: tokenIn.symbol,
+                  })
                 : ''}
             </span>
             {account && balanceInRaw !== null && balanceInRaw > 0n && (
-              <button onClick={handleMax}>МАКС</button>
+              <button onClick={handleMax}>{t('swap.max')}</button>
             )}
           </div>
         </div>
 
-        <button className="switch-btn" onClick={handleSwitchTokens} aria-label="Поменять местами">
+        <button className="switch-btn" onClick={handleSwitchTokens} aria-label={t('swap.switchTokens')}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
           </svg>
@@ -412,7 +424,7 @@ export default function SwapCard({ wallet }) {
         {/* выход */}
         <div className="token-box">
           <div className="token-box-head">
-            <span>Получаете</span>
+            <span>{t('swap.youReceive')}</span>
           </div>
           <div className="token-box-body">
             <input
@@ -438,7 +450,10 @@ export default function SwapCard({ wallet }) {
           <div className="balance-row">
             <span>
               {account && route
-                ? `Мин. получите: ${formatAmount(minReceived, tokenOut.decimals, 8)} ${tokenOut.symbol}`
+                ? t('swap.minReceive', {
+                    amount: formatAmount(minReceived, tokenOut.decimals, 8),
+                    symbol: tokenOut.symbol,
+                  })
                 : ''}
             </span>
           </div>
@@ -448,12 +463,12 @@ export default function SwapCard({ wallet }) {
         {route && (
           <div className="details">
             <div className="detail-row">
-              <span>Маршрут</span>
+              <span>{t('swap.route')}</span>
               <RouteBadges hops={route.hops} />
             </div>
             {rate && (
               <div className="detail-row">
-                <span>Курс</span>
+                <span>{t('swap.rate')}</span>
                 <span className="mono">
                   1 {tokenIn.symbol} = {formatAmount(rate.value, rate.decimals, 6)} {tokenOut.symbol}
                 </span>
@@ -468,16 +483,16 @@ export default function SwapCard({ wallet }) {
                     : 'detail-row'
               }
             >
-              <span>Влияние на цену</span>
+              <span>{t('swap.priceImpact')}</span>
               <span>{formatBps(route.priceImpactBps)}</span>
             </div>
             {route.priceImpactBps > 0 && <ImpactBar bps={route.priceImpactBps} />}
             <div className="detail-row">
-              <span>Комиссия пула</span>
+              <span>{t('swap.poolFee')}</span>
               <span>{formatBps(feeBps)}</span>
             </div>
             <div className="detail-row">
-              <span>Проскальзывание</span>
+              <span>{t('swap.slippage')}</span>
               <span>{formatBps(slippageBps)}</span>
             </div>
           </div>
@@ -486,12 +501,11 @@ export default function SwapCard({ wallet }) {
         {/* статусы */}
         {quoteError && !quoting && <Notice kind="error">{quoteError}</Notice>}
 
-        {insufficientBalance && <Notice kind="warn">Недостаточно {tokenIn.symbol} на балансе</Notice>}
+        {insufficientBalance && <Notice kind="warn">{t('swap.insufficientOnBalance', { symbol: tokenIn.symbol })}</Notice>}
 
         {route && route.priceImpactBps >= 500 && (
           <Notice kind="warn">
-            Влияние на цену {formatBps(route.priceImpactBps)}. В пуле мало ликвидности — вы получите
-            заметно меньше, чем по текущему курсу.
+            {t('swap.impactWarning', { pct: formatBps(route.priceImpactBps) })}
           </Notice>
         )}
 
@@ -499,16 +513,16 @@ export default function SwapCard({ wallet }) {
 
         {txState.status === 'success' && txState.hash && (
           <Notice kind="success">
-            Готово.{' '}
+            {t('swap.done')}{' '}
             <a href={`https://bscscan.com/tx/${txState.hash}`} target="_blank" rel="noreferrer">
-              Открыть в BscScan
+              {t('swap.openExplorer')}
             </a>
           </Notice>
         )}
 
         {txState.status === 'pending' && txState.hash && (
           <Notice kind="info">
-            Транзакция в сети.{' '}
+            {t('swap.txInNetwork')}{' '}
             <a href={`https://bscscan.com/tx/${txState.hash}`} target="_blank" rel="noreferrer">
               BscScan
             </a>
@@ -544,13 +558,13 @@ export default function SwapCard({ wallet }) {
           balances={balances}
           onAddToken={handleAddToken}
           onClose={() => setPickerFor(null)}
-          onSelect={(t) => {
+          onSelect={(picked) => {
             if (pickerFor === 'in') {
-              if (t.address === tokenOut.address) setTokenOut(tokenIn)
-              setTokenIn(t)
+              if (picked.address === tokenOut.address) setTokenOut(tokenIn)
+              setTokenIn(picked)
             } else {
-              if (t.address === tokenIn.address) setTokenIn(tokenOut)
-              setTokenOut(t)
+              if (picked.address === tokenIn.address) setTokenIn(tokenOut)
+              setTokenOut(picked)
             }
             setPickerFor(null)
             setRoute(null)
@@ -562,14 +576,17 @@ export default function SwapCard({ wallet }) {
 }
 
 // Человеческие сообщения вместо сырых ошибок кошелька.
-function friendlyError(e) {
+//
+// t передаётся аргументом, а не берётся из контекста: функция вызывается из
+// обработчиков, где хук уже недоступен.
+function friendlyError(e, t) {
   const msg = e?.message ?? String(e)
-  if (e?.code === 4001 || /user rejected|denied/i.test(msg)) return 'Вы отклонили транзакцию в кошельке'
-  if (/insufficient funds/i.test(msg)) return 'Недостаточно BNB для оплаты газа'
-  if (/TRANSFER_FROM_FAILED/i.test(msg)) return 'Не удалось списать токен: проверьте разрешение (approve)'
-  if (/INSUFFICIENT_OUTPUT_AMOUNT/i.test(msg))
-    return 'Цена ушла: увеличьте проскальзывание или обновите котировку'
-  if (/EXPIRED/i.test(msg)) return 'Истекло время транзакции, попробуйте снова'
-  if (/reverted/i.test(msg)) return 'Транзакция отменена сетью (revert)'
+  const tr = typeof t === 'function' ? t : (key) => key
+  if (e?.code === 4001 || /user rejected|denied/i.test(msg)) return tr('err.userRejected')
+  if (/insufficient funds/i.test(msg)) return tr('err.noGas')
+  if (/TRANSFER_FROM_FAILED/i.test(msg)) return tr('err.transferFrom')
+  if (/INSUFFICIENT_OUTPUT_AMOUNT/i.test(msg)) return tr('err.priceMoved')
+  if (/EXPIRED/i.test(msg)) return tr('err.expired')
+  if (/reverted/i.test(msg)) return tr('err.reverted')
   return msg.length > 160 ? msg.slice(0, 160) + '…' : msg
 }

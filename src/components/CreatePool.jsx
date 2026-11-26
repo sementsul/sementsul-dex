@@ -10,6 +10,7 @@ import { buildCreatePair, buildCreatePool } from '../lib/liquidity.js'
 import { sendTransaction, waitForReceipt } from '../lib/wallet.js'
 import { findV2Pair } from '../lib/pools.js'
 import { TokenIcon, TokenPicker, Notice, Spinner } from './ui.jsx'
+import { useI18n } from '../lib/useI18n.jsx'
 
 // Создание пула.
 //
@@ -18,6 +19,7 @@ import { TokenIcon, TokenPicker, Notice, Spinner } from './ui.jsx'
 // нулевой ценой, и первый, кто добавит туда токены, задаёт цену сам. Второй
 // поставщик обязан с ней считаться, иначе он подарит первому часть своих денег.
 export default function CreatePool({ wallet, onBack, onCreated }) {
+  const { t } = useI18n()
   const [tokenA, setTokenA] = useState(null)
   const [tokenB, setTokenB] = useState(null)
   const [pickerFor, setPickerFor] = useState(null)
@@ -75,7 +77,7 @@ export default function CreatePool({ wallet, onBack, onCreated }) {
   const create = async () => {
     setBusy(true)
     setError(null)
-    setStatus('Подтвердите транзакцию в кошельке…')
+    setStatus(t('create.confirmTx'))
     try {
       let tx
       if (version === 'v2') {
@@ -92,9 +94,9 @@ export default function CreatePool({ wallet, onBack, onCreated }) {
       }
 
       const hash = await sendTransaction(tx)
-      setStatus('Ждём подтверждения…')
+      setStatus(t('tx.waiting'))
       await waitForReceipt(hash)
-      setStatus('Пул создан.')
+      setStatus(t('create.created'))
       onCreated?.()
     } catch (e) {
       setError(e?.shortMessage || e?.message || String(e))
@@ -107,18 +109,15 @@ export default function CreatePool({ wallet, onBack, onCreated }) {
   return (
     <div className="page">
       <button className="back-btn" onClick={onBack}>
-        ← Назад к пулам
+        {t('liq.backToPools')}
       </button>
 
-      <h1 className="page-title">Создать пул</h1>
-      <p className="page-sub">
-        Новый пул начинает с нуля: ни ликвидности, ни цены. Первый поставщик задаёт цену,
-        остальные к ней присоединяются.
-      </p>
+      <h1 className="page-title">{t('create.title')}</h1>
+      <p className="page-sub">{t('create.sub')}</p>
 
       <div className="card form-card">
         <div className="form-field">
-          <label>Первый токен</label>
+          <label>{t('create.firstToken')}</label>
           <button className="token-select wide" onClick={() => setPickerFor('a')}>
             {tokenA ? (
               <>
@@ -126,13 +125,13 @@ export default function CreatePool({ wallet, onBack, onCreated }) {
                 <span>{tokenA.symbol}</span>
               </>
             ) : (
-              <span className="dim">Выбрать токен</span>
+              <span className="dim">{t('create.chooseToken')}</span>
             )}
           </button>
         </div>
 
         <div className="form-field">
-          <label>Второй токен</label>
+          <label>{t('create.secondToken')}</label>
           <button className="token-select wide" onClick={() => setPickerFor('b')}>
             {tokenB ? (
               <>
@@ -140,71 +139,62 @@ export default function CreatePool({ wallet, onBack, onCreated }) {
                 <span>{tokenB.symbol}</span>
               </>
             ) : (
-              <span className="dim">Выбрать токен</span>
+              <span className="dim">{t('create.chooseToken')}</span>
             )}
           </button>
         </div>
 
         <div className="form-field">
-          <label>Тип пула</label>
+          <label>{t('create.poolType')}</label>
           <div className="segmented">
             <button
               className={version === 'v2' ? 'seg active' : 'seg'}
               onClick={() => setVersion('v2')}
             >
-              V2 · обычный
-              <span className="seg-sub">вся цена в одном диапазоне</span>
+              {t('create.v2')}
+              <span className="seg-sub">{t('create.v2sub')}</span>
             </button>
             <button
               className={version === 'v3' ? 'seg active' : 'seg'}
               onClick={() => setVersion('v3')}
               disabled={!HAS_OWN_V3}
-              title={HAS_OWN_V3 ? '' : 'Концентратор ликвидности ещё не развёрнут'}
+              title={HAS_OWN_V3 ? '' : t('create.v3notDeployed')}
             >
-              V3 · концентрированный
-              <span className="seg-sub">ликвидность в выбранном диапазоне</span>
+              {t('create.v3')}
+              <span className="seg-sub">{t('create.v3sub')}</span>
             </button>
           </div>
         </div>
 
         {version === 'v3' && (
           <div className="form-field">
-            <label>Комиссия пула</label>
+            <label>{t('create.fee')}</label>
             <div className="tier-list">
-              {OWN_V3_TIERS.map((t) => (
+              {OWN_V3_TIERS.map((tier) => (
                 <button
-                  key={t.fee}
-                  className={v3Fee === t.fee ? 'tier active' : 'tier'}
-                  onClick={() => setV3Fee(t.fee)}
+                  key={tier.fee}
+                  className={v3Fee === tier.fee ? 'tier active' : 'tier'}
+                  onClick={() => setV3Fee(tier.fee)}
                 >
-                  <span className="tier-fee">{t.label}</span>
-                  <span className="tier-hint">{t.hint}</span>
+                  <span className="tier-fee">{tier.label}</span>
+                  <span className="tier-hint">{t(tier.hintKey)}</span>
                 </button>
               ))}
             </div>
-            <p className="fine-print">
-              Для одной пары можно создать по пулу на каждый тир — это разные пулы с
-              разными адресами, и ликвидность в них не смешивается. Чем ниже комиссия,
-              тем дешевле торговать и тем меньше зарабатывает поставщик ликвидности.
-            </p>
+            <p className="fine-print">{t('create.feeNote')}</p>
           </div>
         )}
 
-        {identical && <Notice kind="error">Это один и тот же токен — пул с самим собой невозможен.</Notice>}
+        {identical && <Notice kind="error">{t('create.identical')}</Notice>}
 
         {existing && (
           <Notice kind="warn">
-            Пара уже существует: <span className="mono">{existing}</span>. Создавать вторую не
-            нужно — добавьте ликвидность в существующую.
+            {t('create.existsPrefix')} <span className="mono">{existing}</span>.{' '}
+            {t('create.existsSuffix')}
           </Notice>
         )}
 
-        {version === 'v3' && (
-          <Notice kind="info">
-            После создания V3-пула нужно задать начальную цену. Сделать это можно на странице
-            пула — до этого обмен и ликвидность в нём недоступны.
-          </Notice>
-        )}
+        {version === 'v3' && <Notice kind="info">{t('create.v3PriceNotice')}</Notice>}
 
         {status && (
           <Notice kind="info">
@@ -217,18 +207,15 @@ export default function CreatePool({ wallet, onBack, onCreated }) {
 
         <button className="primary-btn" disabled={!canCreate || blocked} onClick={create}>
           {blocked
-            ? 'Операции заблокированы'
+            ? t('compliance.actionsBlocked')
             : !account
-              ? 'Сначала подключите кошелёк'
+              ? t('create.connectFirst')
               : busy
-                ? 'Создаём…'
-                : 'Создать пул'}
+                ? t('create.creating')
+                : t('create.submit')}
         </button>
 
-        <p className="fine-print">
-          Создание пула — это одна транзакция и небольшой расход газа. Комиссию за обмен
-          устанавливает фабрика, а не создатель пула: подкрутить её в свою пользу нельзя.
-        </p>
+        <p className="fine-print">{t('create.finePrint')}</p>
       </div>
 
       {pickerFor && (
