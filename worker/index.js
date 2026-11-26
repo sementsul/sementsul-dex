@@ -1,4 +1,4 @@
-﻿// Cloudflare Worker: API индексатора сделок PancakeSwap для SML.
+// Cloudflare Worker: API индексатора сделок PancakeSwap для SML.
 //
 // Что здесь есть и чего нет:
 //
@@ -28,22 +28,61 @@ import { TOPIC_SWAP_V2, TOPIC_SWAP_V3, parseSwapV2, parseSwapV3 } from './logic.
 // Раньше здесь стоял чужой пул SML/WBNB. Он не имеет отношения к нашей бирже,
 // поэтому запрос без параметра pair отдавал историю чужого рынка: интерфейс
 // выглядел наполненным, но цифры были не наши.
-const DEFAULT_PAIR = '0x37c7702B589c69D1E4f4ad32E19f372ED6780278'
+const DEFAULT_PAIR = '0x37c7702b589c69d1e4f4ad32e19f372ed6780278'
+
+// Адрес пары приводим к нижнему регистру ВСЕГДА.
+//
+// Причина — реальная поломка. Индексатор писал pair в EIP-55-виде
+// (0x37c7702B589c69D1E4f4ad32E19f372ED6780278), а фронтенд брал адрес из
+// deployments.js, где та же строка записана с другой контрольной суммой
+// (…D1e4…). SQLite сравнивает TEXT побайтово, поэтому `pair = ?` не находил
+// НИ ОДНОЙ строки: эндпоинты отдавали пустые списки при живых данных в базе.
+// Ошибка была невидимой — 200 OK с пустым массивом, а не 500.
+//
+// Сравнение регистронезависимо через LOWER(pair) не годится: оно снимает
+// индекс и заставляет читать всю таблицу, а именно это и выжгло лимит D1.
+// Поэтому нормализуем и хранение, и запрос к нижнему регистру — тогда индекс
+// (pair, kind, ts DESC) продолжает работать.
+function normPair(raw) {
+  return String(raw ?? DEFAULT_PAIR).trim().toLowerCase()
+}
 
 const CORS = {
   'access-control-allow-origin': '*',
   'access-control-allow-methods': 'GET,OPTIONS',
 }
 
-function json(data, status = 200) {
+function json(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'content-type': 'application/json; charset=utf-8', ...CORS },
+    headers: { 'content-type': 'application/json; charset=utf-8', ...CORS, ...extraHeaders },
   })
 }
 
+// Кеш ответов на границе Cloudflare.
+//
+// Зачем: данные индексатора меняются только когда отработает GitHub Actions
+// (раз в несколько минут), а фронтенд спрашивает их раз в минуту с каждого
+// открытого таба. Без кеша каждый такой запрос шёл в D1 и читал строки из
+// суточного лимита. С кешем один поход в базу обслуживает всех посетителей
+// в пределах TTL, и расход перестаёт зависеть от числа открытых вкладок.
+//
+// TTL подобран под частоту индексатора: чаще, чем он обновляет данные,
+// отдавать свежие всё равно нечего.
+const CACHE_TTL = {
+  '/api/trades': 30,
+  '/api/stats': 60,
+  '/api/candles': 120,
+}
+
+function cacheKeyFor(request, pathname) {
+  // Ключ обязан включать query: pair, interval и limit меняют ответ.
+  const url = new URL(request.url)
+  return new Request(`https://cache.sementsul.net${pathname}${url.search}`, { method: 'GET' })
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url)
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS })
@@ -54,19 +93,93 @@ export default {
         case '/api/health':
           return json({ ok: true, ts: Date.now() })
         case '/api/candles':
-          return await handleCandles(url, env)
+          return await cached(request, env, ctx, url.pathname, (u) => handleCandles(u, env))
         case '/api/trades':
-          return await handleTrades(url, env)
+          return await cached(request, env, ctx, url.pathname, (u) => handleTrades(u, env))
         case '/api/stats':
-          return await handleStats(url, env)
+          return await cached(request, env, ctx, url.pathname, (u) => handleStats(u, env))
         default:
           return json({ error: 'не найдено' }, 404)
       }
     } catch (e) {
       console.error('worker error', e?.stack ?? e)
-      return json({ error: e.message ?? String(e) }, 500)
+
+      // Исчерпанный суточный лимит D1 — это не поломка кода, а состояние
+      // аккаунта. Отдаём 503 и честный текст, чтобы фронтенд мог показать
+      // «история временно недоступна» вместо вечной загрузки, а в логах
+      // не было ложной тревоги «worker error».
+      const msg = String(e?.message ?? e)
+      if (msg.includes('exceeded D1') || msg.includes('daily row read limit')) {
+        return json(
+          {
+            error: 'история сделок временно недоступна: исчерпан суточный лимит чтения D1',
+            code: 'D1_LIMIT',
+            retryAfter: secondsUntilUtcMidnight(),
+          },
+          503,
+          { 'retry-after': String(secondsUntilUtcMidnight()) }
+        )
+      }
+
+      return json({ error: msg }, 500)
     }
   },
+}
+
+// Сколько секунд осталось до полуночи UTC — момента сброса суточного лимита D1.
+function secondsUntilUtcMidnight() {
+  const now = Date.now()
+  const next = Date.UTC(
+    new Date(now).getUTCFullYear(),
+    new Date(now).getUTCMonth(),
+    new Date(now).getUTCDate() + 1
+  )
+  return Math.max(1, Math.ceil((next - now) / 1000))
+}
+
+// Отдать ответ из кеша или выполнить обработчик и положить результат в кеш.
+async function cached(request, env, ctx, pathname, handler) {
+  const ttl = CACHE_TTL[pathname]
+  // Кеш доступен не всегда (например, в локальном miniflare без кеша),
+  // поэтому отсутствие caches не должно ломать запрос.
+  const cache = typeof caches !== 'undefined' ? caches.default : null
+  const key = cache ? cacheKeyFor(request, pathname) : null
+
+  if (cache && key) {
+    const hit = await cache.match(key)
+    if (hit) {
+      // Помечаем, что ответ из кеша: это видно в заголовках и упрощает отладку.
+      const res = new Response(hit.body, hit)
+      res.headers.set('x-cache', 'HIT')
+      return res
+    }
+  }
+
+  const url = new URL(request.url)
+  const res = await handler(url)
+
+  // Ошибки не кешируем: иначе исчерпанный лимит D1 «залипнет» на TTL.
+  if (!cache || !key || !res.ok) return res
+
+  // Заголовки ставим на ТОТ ЖЕ ответ, который уходит клиенту, а не только на
+  // копию для кеша.
+  //
+  // Это была настоящая ошибка: раньше cache-control выставлялся лишь на
+  // `toCache`, а клиенту возвращался `res` без него. Cloudflare, не увидев
+  // Cache-Control от воркера, подставлял значение зоны browser_cache_ttl
+  // (14400 секунд), и ответы жили в браузере 4 часа вместо 30 секунд.
+  //
+  // s-maxage управляет кешем на границе, max-age — браузером. Держим их
+  // равными: данные индексатора обновляются не чаще, чем раз в несколько
+  // минут, и более долгий браузерный кеш только показывал бы устаревшее.
+  res.headers.set('cache-control', `public, max-age=${ttl}, s-maxage=${ttl}`)
+  res.headers.set('x-cache', 'MISS')
+
+  // В кеш кладём отдельную копию: тело ответа уже отдаётся клиенту.
+  const toCache = new Response(res.clone().body, res)
+  ctx?.waitUntil?.(cache.put(key, toCache))
+
+  return res
 }
 
 // ---------- API ----------
@@ -74,66 +187,88 @@ export default {
 const INTERVALS = { '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400 }
 
 async function handleCandles(url, env) {
-  const pair = url.searchParams.get('pair') ?? DEFAULT_PAIR
+  const pair = normPair(url.searchParams.get('pair'))
   const interval = url.searchParams.get('interval') ?? '1h'
   const limit = Math.min(Number(url.searchParams.get('limit') ?? 200), 1000)
 
   const bucket = INTERVALS[interval]
   if (!bucket) return json({ error: 'неизвестный интервал', allowed: Object.keys(INTERVALS) }, 400)
 
-  // Свечи собираем в SQL: группировка по номеру бакета.
+  // Свечи собираем ОДНИМ запросом.
+  //
+  // Раньше здесь был цикл: агрегат по бакетам, а затем на КАЖДУЮ свечу ещё по
+  // два запроса за open и close. При limit=200 это 1 + 400 = 401 обращение к D1
+  // за один HTTP-вызов. Каждый из этих запросов фильтровал по выражению
+  // (ts / ?) * ? = ?, которое индекс не покрывает, поэтому SQLite читал всю
+  // таблицу целиком. Фронтенд опрашивает /api/candles раз в минуту, так что
+  // 5 млн строк в сутки выжигались за считанные часы.
+  //
+  // Теперь open и close считаются оконными функциями в том же проходе:
+  // ROW_NUMBER() нумерует сделки внутри бакета по возрастанию и по убыванию
+  // времени, и первая строка каждой нумерации — это open и close.
+  //
+  // ПОЧЕМУ CAST(... AS INTEGER) ВОКРУГ БАКЕТА.
+  //
+  // Параметры приходят из JS как числа, и драйвер передаёт их в SQLite как
+  // REAL. Для REAL деление не целочисленное: (1795710764 / 3600.0) * 3600.0
+  // даёт 1795710764, а не 1795708800. Каждая сделка попадала в собственный
+  // «бакет», и свечи не группировались: вместо одной часовой свечи с двумя
+  // сделками приходило две свечи по одной. С целыми литералами (3600) SQLite
+  // делит нацело, но с параметрами — уже нет, поэтому приводим явно.
+  //
   // kind='swap' обязателен: flash-свопы дают нулевую/мусорную цену и не должны
   // попадать ни в OHLC, ни в объём.
   const { results } = await env.DB.prepare(
     `SELECT
-       (ts / ?) * ? AS bucket,
+       bucket,
        MIN(ts) AS ts,
-       AVG(CAST(price AS REAL)) AS _avg,
-       MIN(CAST(price AS REAL)) AS low,
-       MAX(CAST(price AS REAL)) AS high,
+       MIN(price) AS low,
+       MAX(price) AS high,
        COUNT(*) AS trades,
-       SUM(CAST(amount_in AS REAL)) AS volume
-     FROM trades
-     WHERE pair = ?
-       AND kind = 'swap'
-       AND ts > (strftime('%s','now') - ? * 60)
+       SUM(amount_in) AS volume,
+       MIN(CASE WHEN rn_asc = 1 THEN price END)  AS open,
+       MIN(CASE WHEN rn_desc = 1 THEN price END) AS close
+     FROM (
+       SELECT
+         CAST(ts / CAST(? AS INTEGER) AS INTEGER) * CAST(? AS INTEGER) AS bucket,
+         ts,
+         CAST(price AS REAL)      AS price,
+         CAST(amount_in AS REAL)  AS amount_in,
+         ROW_NUMBER() OVER (
+           PARTITION BY CAST(ts / CAST(? AS INTEGER) AS INTEGER) * CAST(? AS INTEGER)
+           ORDER BY ts ASC, log_index ASC
+         ) AS rn_asc,
+         ROW_NUMBER() OVER (
+           PARTITION BY CAST(ts / CAST(? AS INTEGER) AS INTEGER) * CAST(? AS INTEGER)
+           ORDER BY ts DESC, log_index DESC
+         ) AS rn_desc
+       FROM trades
+       WHERE pair = ?
+         AND kind = 'swap'
+         AND ts > (strftime('%s','now') - ?)
+     )
      GROUP BY bucket
      ORDER BY bucket DESC
      LIMIT ?`
   )
-    .bind(bucket, bucket, pair, bucket * limit, limit)
+    .bind(bucket, bucket, bucket, bucket, bucket, bucket, pair, bucket * limit, limit)
     .all()
 
-  // open/close требуют первой и последней сделки в бакете — досчитываем отдельно.
-  const candles = []
-  for (const r of results ?? []) {
-    const open = await env.DB.prepare(
-      `SELECT price FROM trades WHERE pair = ? AND kind = 'swap' AND (ts / ?) * ? = ? ORDER BY ts ASC, log_index ASC LIMIT 1`
-    )
-      .bind(pair, bucket, bucket, r.bucket)
-      .first()
-    const close = await env.DB.prepare(
-      `SELECT price FROM trades WHERE pair = ? AND kind = 'swap' AND (ts / ?) * ? = ? ORDER BY ts DESC, log_index DESC LIMIT 1`
-    )
-      .bind(pair, bucket, bucket, r.bucket)
-      .first()
-
-    candles.push({
-      time: r.ts,
-      open: Number(open?.price ?? r._avg),
-      high: r.high,
-      low: r.low,
-      close: Number(close?.price ?? r._avg),
-      trades: r.trades,
-      volume: r.volume,
-    })
-  }
+  const candles = (results ?? []).map((r) => ({
+    time: r.ts,
+    open: r.open,
+    high: r.high,
+    low: r.low,
+    close: r.close,
+    trades: r.trades,
+    volume: r.volume,
+  }))
 
   return json({ pair, interval, candles })
 }
 
 async function handleTrades(url, env) {
-  const pair = url.searchParams.get('pair') ?? DEFAULT_PAIR
+  const pair = normPair(url.searchParams.get('pair'))
   const limit = Math.min(Number(url.searchParams.get('limit') ?? 20), 200)
 
   const { results } = await env.DB.prepare(
@@ -151,7 +286,7 @@ async function handleTrades(url, env) {
 }
 
 async function handleStats(url, env) {
-  const pair = url.searchParams.get('pair') ?? DEFAULT_PAIR
+  const pair = normPair(url.searchParams.get('pair'))
 
   const last = await env.DB.prepare(
     `SELECT price, ts FROM trades WHERE pair = ? AND kind = 'swap' ORDER BY block DESC, log_index DESC LIMIT 1`

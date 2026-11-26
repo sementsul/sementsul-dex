@@ -24,6 +24,7 @@ const SUITES = [
   ['подпись и калибровка деплоя', 'test-deploy-signing.mjs'],
   ['газ транзакций (потолок RPC)', 'test-gas.mjs'],
   ['разбор Swap-событий', 'test-swap-parsing.mjs'],
+  ['бюджет D1 и регистр адреса пары', 'test-d1-budget.mjs'],
   ['вывод средств (защита от молчаливых ошибок)', 'test-withdraw.mjs'],
   ['комплаенс: гео и санкционный список', 'test-compliance.mjs'],
   ['комплаенс: гейт транзакций и dist', 'test-compliance-integration.mjs'],

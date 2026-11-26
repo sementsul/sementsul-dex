@@ -27,7 +27,15 @@ import { parseSwapV2, parseSwapV3 } from '../worker/logic.js'
 // Пул по умолчанию — свой USDT/WBNB в V3. Раньше здесь стоял чужой пул
 // SML/WBNB, к нашей бирже отношения не имеющий: история по нему накапливалась,
 // но показывать её было негде.
-const PAIR = process.env.PAIR ?? '0x37c7702B589c69D1E4f4ad32E19f372ED6780278'
+//
+// Адрес приводим к НИЖНЕМУ регистру. Раньше здесь стоял EIP-55-вид, и это
+// сломало чтение: фронтенд берёт адрес из deployments.js, где контрольная
+// сумма расставлена иначе (…D1e4… против …D1E4…). SQLite сравнивает TEXT
+// побайтово, поэтому `pair = ?` не находил ни одной строки — API отдавал 200
+// с пустым массивом. Подробности в worker/schema.sql и worker/index.js.
+const PAIR = (
+  process.env.PAIR ?? '0x37c7702B589c69D1E4f4ad32E19f372ED6780278'
+).toLowerCase()
 const DAYS = Number(process.env.DAYS ?? 7)
 const MAX_BLOCKS = Number(process.env.MAX_BLOCKS ?? 40000)
 
