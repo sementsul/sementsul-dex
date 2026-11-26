@@ -32,6 +32,8 @@ export default function CreatePool({ wallet, onBack, onCreated }) {
   const [existing, setExisting] = useState(undefined)
 
   const { account } = wallet
+  const compliance = wallet.compliance ?? {}
+  const blocked = compliance.blocked ?? false
 
   const tokens = useMemo(() => KNOWN_TOKENS.filter((t) => !t.native), [])
 
@@ -211,9 +213,16 @@ export default function CreatePool({ wallet, onBack, onCreated }) {
         )}
 
         {error && <Notice kind="error">{error}</Notice>}
+        {blocked && <Notice kind="error">{compliance.reason}</Notice>}
 
-        <button className="primary-btn" disabled={!canCreate} onClick={create}>
-          {!account ? 'Сначала подключите кошелёк' : busy ? 'Создаём…' : 'Создать пул'}
+        <button className="primary-btn" disabled={!canCreate || blocked} onClick={create}>
+          {blocked
+            ? 'Операции заблокированы'
+            : !account
+              ? 'Сначала подключите кошелёк'
+              : busy
+                ? 'Создаём…'
+                : 'Создать пул'}
         </button>
 
         <p className="fine-print">

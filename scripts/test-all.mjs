@@ -25,6 +25,9 @@ const SUITES = [
   ['газ транзакций (потолок RPC)', 'test-gas.mjs'],
   ['разбор Swap-событий', 'test-swap-parsing.mjs'],
   ['вывод средств (защита от молчаливых ошибок)', 'test-withdraw.mjs'],
+  ['комплаенс: гео и санкционный список', 'test-compliance.mjs'],
+  ['комплаенс: гейт транзакций и dist', 'test-compliance-integration.mjs'],
+  ['комплаенс: документация против кода', 'test-compliance-docs.mjs'],
   ['база знаний и форматирование', 'test-knowledge.mjs'],
 ]
 

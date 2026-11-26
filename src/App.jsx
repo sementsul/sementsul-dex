@@ -3,6 +3,7 @@ import SwapCard from './components/SwapCard.jsx'
 import RecentTrades from './components/RecentTrades.jsx'
 import PoolsPage from './components/PoolsPage.jsx'
 import KnowledgePage from './components/KnowledgePage.jsx'
+import BlockedScreen from './components/BlockedScreen.jsx'
 import { useWallet } from './lib/useWallet.js'
 import { shortAddress } from './lib/format.js'
 import { CHAIN_ID } from './lib/chain.js'
@@ -16,6 +17,20 @@ const TABS = [
 export default function App() {
   const wallet = useWallet()
   const [tab, setTab] = useState('swap')
+  const compliance = wallet.compliance
+
+  // Гео-блокировка заменяет весь интерфейс. Это не оверлей: под ним не
+  // должно оставаться работающих кнопок, иначе блокировка обходится
+  // удалением одного элемента через devtools.
+  if (compliance.geoBlocked) {
+    return (
+      <BlockedScreen
+        title={compliance.geoTitle}
+        message={compliance.geoMessage}
+        kind={compliance.geoKind}
+      />
+    )
+  }
 
   return (
     <div className="app">
@@ -50,6 +65,9 @@ export default function App() {
               {wallet.wrongChain && (
                 <span style={{ color: 'var(--red)', fontSize: 11, fontWeight: 700 }}>НЕ ТА СЕТЬ</span>
               )}
+              {compliance.addressBlocked && (
+                <span style={{ color: 'var(--red)', fontSize: 11, fontWeight: 700 }}>ЗАБЛОКИРОВАН</span>
+              )}
             </button>
           ) : (
             <button className="wallet-btn" onClick={wallet.connect}>
@@ -62,6 +80,24 @@ export default function App() {
           </a>
         )}
       </header>
+
+      {/* Адрес в санкционном списке: показываем постоянную плашку над
+          контентом. Интерфейс остаётся доступным для чтения — блокируются
+          только операции, и причина видна всегда, а не только при клике. */}
+      {compliance.addressBlocked && (
+        <div className="compliance-banner" role="alert">
+          <strong>Операции заблокированы.</strong> {compliance.addressMessage}
+        </div>
+      )}
+
+      {/* Список санкций не загрузился — честно сообщаем, что проверка не
+          выполнялась, вместо того чтобы молча пропустить адрес. */}
+      {compliance.sanctionsUnavailable && !compliance.addressBlocked && (
+        <div className="compliance-banner warn" role="status">
+          Список санкций не загрузился, проверка адреса не выполнялась. Операции
+          доступны; проверка по юрисдикции работает как обычно.
+        </div>
+      )}
 
       <main className="main">
         {tab === 'swap' && (

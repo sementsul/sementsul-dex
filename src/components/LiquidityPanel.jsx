@@ -113,6 +113,8 @@ async function ensureAllowance({ token, owner, spender, amount }) {
 // ---------------------------------------------------------------------------
 
 function AddV2({ pool, wallet, onDone }) {
+  const compliance = wallet.compliance ?? {}
+  const blocked = compliance.blocked ?? false
   const { account } = wallet
   const [val0, setVal0] = useState('')
   const [val1, setVal1] = useState('')
@@ -240,8 +242,18 @@ function AddV2({ pool, wallet, onDone }) {
       )}
       {error && <Notice kind="error">{error}</Notice>}
 
-      <button className="primary-btn" disabled={!canAdd} onClick={add}>
-        {!account ? 'Сначала подключите кошелёк' : busy ? 'Добавляем…' : 'Добавить ликвидность'}
+      {/* Комплаенс: причина видна до нажатия, а не только после отказа
+          кошелька. Кнопка ниже блокируется тем же флагом. */}
+      {blocked && <Notice kind="error">{compliance.reason}</Notice>}
+
+      <button className="primary-btn" disabled={!canAdd || blocked} onClick={add}>
+        {blocked
+          ? 'Операции заблокированы'
+          : !account
+            ? 'Сначала подключите кошелёк'
+            : busy
+              ? 'Добавляем…'
+              : 'Добавить ликвидность'}
       </button>
     </div>
   )
@@ -252,6 +264,8 @@ function AddV2({ pool, wallet, onDone }) {
 // ---------------------------------------------------------------------------
 
 function RemoveV2({ pool, wallet, onDone }) {
+  const compliance = wallet.compliance ?? {}
+  const blocked = compliance.blocked ?? false
   const { account } = wallet
   const [lp, setLp] = useState(null)
   const [supply, setSupply] = useState(null)
@@ -357,8 +371,16 @@ function RemoveV2({ pool, wallet, onDone }) {
       )}
       {error && <Notice kind="error">{error}</Notice>}
 
-      <button className="primary-btn" disabled={liquidity === 0n || busy} onClick={remove}>
-        {busy ? 'Выводим…' : liquidity > 0n ? 'Вывести ликвидность' : 'Нет LP-токенов'}
+      {blocked && <Notice kind="error">{compliance.reason}</Notice>}
+
+      <button className="primary-btn" disabled={liquidity === 0n || busy || blocked} onClick={remove}>
+        {blocked
+          ? 'Операции заблокированы'
+          : busy
+            ? 'Выводим…'
+            : liquidity > 0n
+              ? 'Вывести ликвидность'
+              : 'Нет LP-токенов'}
       </button>
     </div>
   )
@@ -374,6 +396,8 @@ function RemoveV2({ pool, wallet, onDone }) {
 // Цену задаём как «сколько token1 за 1 token0» — так это привычнее читать.
 // В контракт уходит sqrtPriceX96 = sqrt(price) * 2^96 с поправкой на decimals.
 export function SetPrice({ pool, wallet, onDone }) {
+  const compliance = wallet.compliance ?? {}
+  const blocked = compliance.blocked ?? false
   const [price, setPrice] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -447,9 +471,14 @@ export function SetPrice({ pool, wallet, onDone }) {
         </Notice>
       )}
       {error && <Notice kind="error">{error}</Notice>}
+      {blocked && <Notice kind="error">{compliance.reason}</Notice>}
 
-      <button className="primary-btn" disabled={!sqrtPrice || busy || !wallet.account} onClick={set}>
-        {busy ? 'Устанавливаем…' : 'Установить цену'}
+      <button
+        className="primary-btn"
+        disabled={!sqrtPrice || busy || !wallet.account || blocked}
+        onClick={set}
+      >
+        {blocked ? 'Операции заблокированы' : busy ? 'Устанавливаем…' : 'Установить цену'}
       </button>
     </>
   )
@@ -460,6 +489,8 @@ export function SetPrice({ pool, wallet, onDone }) {
 // ---------------------------------------------------------------------------
 
 function AddV3({ pool, wallet, onDone }) {
+  const compliance = wallet.compliance ?? {}
+  const blocked = compliance.blocked ?? false
   const { account } = wallet
   const [range, setRange] = useState(10)
   const [amount, setAmount] = useState('')
@@ -610,13 +641,20 @@ function AddV3({ pool, wallet, onDone }) {
         </Notice>
       )}
       {error && <Notice kind="error">{error}</Notice>}
+      {blocked && <Notice kind="error">{compliance.reason}</Notice>}
 
       <button
         className="primary-btn"
-        disabled={!account || liquidity === 0n || busy}
+        disabled={!account || liquidity === 0n || busy || blocked}
         onClick={add}
       >
-        {!account ? 'Сначала подключите кошелёк' : busy ? 'Добавляем…' : 'Создать позицию'}
+        {blocked
+          ? 'Операции заблокированы'
+          : !account
+            ? 'Сначала подключите кошелёк'
+            : busy
+              ? 'Добавляем…'
+              : 'Создать позицию'}
       </button>
     </div>
   )
@@ -633,6 +671,8 @@ function AddV3({ pool, wallet, onDone }) {
 // Ввести неверный диапазон не опасно: readV3Position вернёт null, и кнопка
 // останется выключенной.
 function RemoveV3({ pool, wallet, onDone }) {
+  const compliance = wallet.compliance ?? {}
+  const blocked = compliance.blocked ?? false
   const { account } = wallet
   const [lower, setLower] = useState('')
   const [upper, setUpper] = useState('')
@@ -782,9 +822,10 @@ function RemoveV3({ pool, wallet, onDone }) {
         </Notice>
       )}
       {error && <Notice kind="error">{error}</Notice>}
+      {blocked && <Notice kind="error">{compliance.reason}</Notice>}
 
-      <button className="primary-btn" disabled={!pos || busy} onClick={withdraw}>
-        {busy ? 'Выводим…' : 'Забрать всё'}
+      <button className="primary-btn" disabled={!pos || busy || blocked} onClick={withdraw}>
+        {blocked ? 'Операции заблокированы' : busy ? 'Выводим…' : 'Забрать всё'}
       </button>
     </div>
   )

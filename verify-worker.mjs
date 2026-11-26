@@ -41,23 +41,31 @@ console.log('последний блок:', latest)
 
 let sawFlash = false
 
+// Публичный RPC не отдаёт eth_getLogs шире 10 000 блоков
+// («query exceeds max block range 10000»). Раньше здесь стояло окно 35 000,
+// и скрипт падал на первом же запросе. 9 000 — с запасом.
+const WINDOW = 9000
+
 for (const [name, pair] of Object.entries(PAIRS)) {
   console.log(`\n=== ${name} (${pair}) ===`)
 
   let logs = []
   let from = latest
-  for (let attempt = 0; attempt < 6 && logs.length === 0; attempt++) {
-    const start = from - 35000
+  for (let attempt = 0; attempt < 8 && logs.length === 0; attempt++) {
+    const start = Math.max(0, from - WINDOW)
     logs = await rpc('eth_getLogs', [
       {
         address: pair,
         topics: [TOPIC_SWAP_V2],
-        fromBlock: '0x' + Math.max(0, start).toString(16),
+        fromBlock: '0x' + start.toString(16),
         toBlock: '0x' + from.toString(16),
       },
     ])
     console.log(`  окно ${start}..${from}: ${logs.length} событий`)
-    from = start
+    if (start === 0) break
+    // Следующее окно заканчивается на блок перед началом текущего,
+    // иначе границы пересекаются и события считаются дважды.
+    from = start - 1
   }
 
   if (logs.length === 0) {

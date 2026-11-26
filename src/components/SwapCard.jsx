@@ -17,7 +17,8 @@ const SLIPPAGE_OPTIONS = [10, 50, 100] // 0.1%, 0.5%, 1%
 const MAX_UINT256 = (1n << 256n) - 1n
 
 export default function SwapCard({ wallet }) {
-  const { account, chainId, available, connect, wrongChain } = wallet
+  const { account, chainId, available, connect, wrongChain, compliance } = wallet
+  const blocked = compliance?.blocked ?? false
 
   const [tokens, setTokens] = useState(() => {
     // Импортированные ранее токены переживают перезагрузку страницы.
@@ -191,6 +192,18 @@ export default function SwapCard({ wallet }) {
 
   const handleSwap = useCallback(async () => {
     if (!route || !account) return
+
+    // Ранний выход для заблокированного пользователя. Гейт в sendTransaction
+    // всё равно сработает, но здесь мы не строим транзакцию и не показываем
+    // «Ожидание в кошельке» — иначе интерфейс выглядит так, будто операция
+    // началась.
+    try {
+      compliance?.assertAllowed?.()
+    } catch (e) {
+      setTxState({ status: 'error', hash: null, error: e.message })
+      return
+    }
+
     const tx = buildSwapTx({
       route,
       tokenIn: tokenIn.address,
@@ -222,7 +235,7 @@ export default function SwapCard({ wallet }) {
     } catch (e) {
       setTxState({ status: 'error', hash: null, error: friendlyError(e) })
     }
-  }, [route, account, tokenIn, tokenOut, slippageBps])
+  }, [route, account, tokenIn, tokenOut, slippageBps, compliance])
 
   const handleSwitchTokens = useCallback(() => {
     setTokenIn(tokenOut)
@@ -283,6 +296,13 @@ export default function SwapCard({ wallet }) {
       }
     }
     if (!account) return { label: 'Подключить кошелёк', disabled: false, onClick: connect }
+
+    // Комплаенс-блокировка идёт раньше всех прочих проверок: показывать
+    // «введите сумму» заблокированному пользователю бессмысленно и выглядит
+    // как издевательство. Проверка дублирует гейт в sendTransaction, но там
+    // она сработала бы уже после нажатия — здесь кнопка просто не работает.
+    if (blocked) return { label: 'Операции заблокированы', disabled: true, blocked: true }
+
     if (wrongChain) {
       return {
         label: 'Переключиться на BNB Chain',

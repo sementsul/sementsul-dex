@@ -144,8 +144,32 @@ export const MAX_GAS = 16_777_216n
 // упрётся в out-of-gas, и это понятная ошибка, а не отказ RPC.
 export const FALLBACK_GAS = 3_000_000n
 
+// ---------- комплаенс-шлюз ----------
+//
+// Все транзакции в приложении идут через sendTransaction, поэтому проверка
+// здесь — единственная точка, которую нельзя обойти, вызвав обработчик
+// кнопки напрямую из консоли браузера. Компоненты выставляют этот гейт через
+// setComplianceGate из useCompliance.
+//
+// Гейт — функция без аргументов, которая бросает Error с объяснением, если
+// операция запрещена. null означает «проверок нет» (локальная разработка без
+// API или до инициализации приложения).
+let complianceGate = null
+
+export function setComplianceGate(fn) {
+  complianceGate = typeof fn === 'function' ? fn : null
+}
+
+export function getComplianceGate() {
+  return complianceGate
+}
+
 // Отправить транзакцию через кошелёк. Возвращает хеш.
 export async function sendTransaction({ to, data, value = 0n, gasLimit }) {
+  // Проверка ДО любых сетевых вызовов: если операция запрещена, не нужно ни
+  // оценивать газ, ни тревожить кошелёк.
+  if (complianceGate) complianceGate()
+
   const eth = getInjected()
   if (!eth) throw new Error('Кошелёк не найден')
 
