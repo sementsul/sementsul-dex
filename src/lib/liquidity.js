@@ -300,11 +300,27 @@ export async function describeV3Pool(address) {
 //
 // Пустые пулы не выбрасываем: пользователь мог только что создать пул и должен
 // увидеть его в списке, иначе решит, что создание не сработало.
+// Пулы, которые не показываем в общем списке.
+//
+// Здесь бывшая пара SEM/WBNB. Токен был тестовым и снят с биржи, но контракт
+// пары остался на цепи и его видно в фабрике — без этого списка он снова
+// появился бы на странице пулов. Прятать только в интерфейсе не идеально, зато
+// честно: в коде написано, почему, и убрать строку так же просто, как добавить.
+const HIDDEN_POOLS = new Set(
+  [
+    '0x64Dbdff7478fb32A61d8BbA84a29983412FFeb18', // SEM / WBNB, V2
+  ].map((a) => a.toLowerCase())
+)
+
 export async function loadPools() {
   const [v2addrs, v3addrs] = await Promise.all([listV2Pairs(), listV3Pools()])
 
-  const v2 = await Promise.all(v2addrs.map((a) => describeV2Pair(a).catch(() => null)))
-  const v3 = await Promise.all(v3addrs.map((a) => describeV3Pool(a).catch(() => null)))
+  const v2 = await Promise.all(
+    v2addrs.filter((a) => !HIDDEN_POOLS.has(a.toLowerCase())).map((a) => describeV2Pair(a).catch(() => null))
+  )
+  const v3 = await Promise.all(
+    v3addrs.filter((a) => !HIDDEN_POOLS.has(a.toLowerCase())).map((a) => describeV3Pool(a).catch(() => null))
+  )
 
   const all = [...v2.filter(Boolean), ...v3.filter(Boolean)]
 
