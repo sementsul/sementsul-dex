@@ -79,9 +79,6 @@ export default function App() {
           <a href="https://bscscan.com" target="_blank" rel="noreferrer">
             BscScan
           </a>
-          <a href="https://pancakeswap.finance" target="_blank" rel="noreferrer">
-            PancakeSwap
-          </a>
         </div>
         <div>Расчёт маршрута и цены выполняется в браузере. Транзакции подписывает ваш кошелёк.</div>
         <div style={{ marginTop: 6, fontSize: 11 }}>Chain ID {CHAIN_ID} · BNB Smart Chain</div>
