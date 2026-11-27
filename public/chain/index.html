@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sementsul DEX — загрузка из блокчейна</title>
+<link rel="icon" href="/favicon-64.png?v=9cac9fc5" sizes="64x64" type="image/png">
+<link rel="stylesheet" href="loader.css?v=9cac9fc5">
+</head>
+<body>
+<div class="box">
+  <div class="logo"><span class="dot"></span>Sementsul DEX</div>
+  <h1>Загрузка интерфейса из блокчейна</h1>
+  <p>Интерфейс хранится в данных транзакции BNB Chain. Сейчас он будет прочитан с публичного узла и открыт.</p>
+
+  <div class="step" id="s1"><span class="n">1</span><span>Поиск доступного узла BNB Chain</span></div>
+  <div class="step" id="s2"><span class="n">2</span><span>Чтение транзакции из блокчейна</span></div>
+  <div class="step" id="s3"><span class="n">3</span><span>Проверка целостности</span></div>
+  <div class="step" id="s4"><span class="n">4</span><span>Открытие интерфейса</span></div>
+
+  <div class="bar"><i id="progress"></i></div>
+  <div class="mono" id="detail"></div>
+
+  <button id="retry">Попробовать снова</button>
+</div>
+<script src="loader.js?v=9cac9fc5"></script>
+</body>
+</html>

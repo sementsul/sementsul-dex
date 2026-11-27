@@ -40,13 +40,18 @@ check('Сирия блокируется', blockedCountryName('SY') === 'Сир�
 check('Куба блокируется', blockedCountryName('CU') === 'Куба')
 check('регистр не важен: ir', blockedCountryName('ir') === 'Иран')
 
-// Ключевая проверка: это НЕ должно блокироваться. Россия под секторальными
-// санкциями, а не всеобъемлющими; блокировка всей страны была бы самодеятельностью.
-check('Россия НЕ блокируется (нет comprehensive)', blockedCountryName('RU') === null)
-check('Беларусь НЕ блокируется', blockedCountryName('BY') === null)
+// Россия и Беларусь блокируются по решению владельца сервиса, а НЕ по
+// требованию закона. Против России действуют секторальные меры, а не
+// всеобъемлющие: формально блокировать всю страну закон не обязывает.
+// Тест фиксирует именно текущее состояние, чтобы изменение было заметным:
+// если кто-то уберёт Россию из списка, тест упадёт и заставит это осознать.
+check('Россия блокируется (решение владельца)', blockedCountryName('RU') === 'Россия')
+check('Беларусь блокируется (решение владельца)', blockedCountryName('BY') === 'Беларусь')
 check('Украина как страна НЕ блокируется', blockedCountryName('UA') === null)
 check('Казахстан НЕ блокируется', blockedCountryName('KZ') === null)
 check('США НЕ блокируются', blockedCountryName('US') === null)
+check('Грузия НЕ блокируется', blockedCountryName('GE') === null)
+check('Армения НЕ блокируется', blockedCountryName('AM') === null)
 
 check('пустое значение даёт null', blockedCountryName('') === null)
 check('null даёт null', blockedCountryName(null) === null)
@@ -125,7 +130,12 @@ check('Киев: не blocked', kyiv.blocked === false)
 check('Киев: сообщения нет', kyiv.message === null)
 
 const russia = evaluateGeo({ country: 'RU', region: 'Moscow' })
-check('Россия: не blocked', russia.blocked === false)
+check('Россия: blocked (решение владельца)', russia.blocked === true)
+check('Россия: kind=country', russia.kind === 'country')
+check('Россия: в сообщении названа страна', russia.message.includes('Россия'))
+
+const belarus = evaluateGeo({ country: 'BY' })
+check('Беларусь: blocked', belarus.blocked === true)
 
 // Сбой определения не должен ломать сайт целиком.
 check('null не блокирует', evaluateGeo(null).blocked === false)
@@ -192,7 +202,8 @@ check('в коде есть Иран', Boolean(BLOCKED_COUNTRIES.IR))
 check('в коде есть КНДР', Boolean(BLOCKED_COUNTRIES.KP))
 check('в коде есть Сирия', Boolean(BLOCKED_COUNTRIES.SY))
 check('в коде есть Куба', Boolean(BLOCKED_COUNTRIES.CU))
-check('в коде НЕТ России', !BLOCKED_COUNTRIES.RU)
+check('в коде есть Россия', Boolean(BLOCKED_COUNTRIES.RU))
+check('в коде есть Беларусь', Boolean(BLOCKED_COUNTRIES.BY))
 check('регионы Украины перечислены', BLOCKED_UA_REGIONS.length >= 5)
 
 console.log(`\n${passed} passed, ${failed} failed`)

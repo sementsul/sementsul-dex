@@ -26,6 +26,9 @@ export default {
   "v3Factory": "0xc0b597bee57bba0aae2ce9e73e83217331a24dd9",
   "router": "0x2069336bd5e70c4f359ff4142a8b072d074cbbe6",
   "v3Router": "0xf98b7f4effb34dae1f785010ecf71ff796e7fdd1",
+  "poolViewAdapter": "0x9b0c10544604c9b9b26279b4fc6e3fb230927791",
+  "v3RouterStd": "0x7e9c223a53afa8f57374f5ac12773e8cb2405a3e",
+  "v3Quoter": "0xf05aac8bb52498c59b826e092a7908c60787ccdc",
   "wbnb": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
 
   // Бывший тестовый токен SEM. Снят с биржи: он выпускался только чтобы было чем

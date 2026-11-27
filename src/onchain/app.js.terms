@@ -1,0 +1,123 @@
+// ---------- условия и санкционный барьер ----------
+//
+// Два независимых барьера:
+//
+//   1. Условия при первом входе. Показываются один раз, согласие
+//      запоминается в localStorage. Это не юридическая защита сама по себе,
+//      но фиксирует, что человек видел раскрытие рисков.
+//
+//   2. Проверка адреса кошелька по вшитому списку OFAC SDN. Срабатывает
+//      при подключении и при каждой смене аккаунта. Если адрес найден —
+//      кнопки записи блокируются, остаётся только чтение.
+//
+// Чего здесь НЕТ и почему. Геоблокировки нет: браузер не знает IP, а
+// спросить сервер нельзя — у on-chain версии сервера нет по определению.
+// Настоящая геоблокировка живёт на уровне домена (см. functions/api/geo.js
+// и правила Cloudflare для /chain/), а здесь только предупреждение текстом.
+// Это надо понимать буквально: если человек откроет страницу по прямому
+// хешу транзакции, минуя sementsul.net, геоблокировки не будет вовсе.
+//
+// Список вшит на момент публикации и не обновляется сам. OFAC меняет SDN
+// несколько раз в месяц, поэтому проверка — барьер, а не гарантия.
+
+const TERMS_KEY = 'sementsul:terms:v1'
+
+// Результат проверки текущего адреса. null — адрес не проверялся или чист.
+let sanctionHit = null
+
+// Показаны ли условия. Читаем из localStorage, но не падаем, если он
+// недоступен: в приватном режиме и при запрете сторонних данных доступ
+// к нему бросает исключение, а интерфейс должен открыться всё равно.
+function termsAccepted() {
+  try {
+    return localStorage.getItem(TERMS_KEY) === '1'
+  } catch (e) {
+    return false
+  }
+}
+
+function acceptTerms() {
+  try {
+    localStorage.setItem(TERMS_KEY, '1')
+  } catch (e) {
+    // Не смогли запомнить — не страшно, спросим в следующий раз.
+  }
+}
+
+// Проверяет адрес и запоминает результат. Вызывается при подключении и при
+// смене аккаунта в кошельке: иначе можно подключить чистый адрес, а потом
+// переключиться на санкционный и продолжить работу.
+function checkSanctions(address) {
+  sanctionHit = address && isSanctioned(address) ? address : null
+  return sanctionHit
+}
+
+// Экран условий. Возвращает true, если условия показаны и дальше рисовать
+// интерфейс не нужно.
+function renderTerms() {
+  if (termsAccepted()) return false
+
+  const box = $('#view')
+  box.innerHTML = ''
+  const card = el('div', 'card')
+  card.append(el('h2', null, TERMS_TITLE))
+
+  const list = el('div', 'terms')
+  for (const item of TERMS_ITEMS) {
+    list.append(el('div', 'terms-item', item))
+  }
+  card.append(list)
+
+  const facts = el('div', 'info')
+  facts.append(infoRow('Список санкций', sanctionsCount() + ' адресов, на ' + SANCTIONS_DATE))
+  facts.append(infoRow('Сеть', 'BNB Chain (56)'))
+  card.append(facts)
+
+  const b = el('button', 'btn primary', TERMS_ACCEPT)
+  b.onclick = () => {
+    acceptTerms()
+    render()
+  }
+  card.append(b)
+
+  box.append(card)
+  return true
+}
+
+// Экран блокировки по санкциям. Показывается вместо интерфейса целиком:
+// оставлять вкладки активными при санкционном адресе бессмысленно и опасно.
+function renderSanctioned() {
+  const box = $('#view')
+  box.innerHTML = ''
+  const card = el('div', 'card')
+  card.append(el('h2', null, 'Адрес заблокирован'))
+  card.append(
+    el(
+      'div',
+      'hint',
+      'Подключённый адрес найден в санкционном списке OFAC SDN. Операции обмена и предоставления ликвидности недоступны.'
+    )
+  )
+  const facts = el('div', 'info')
+  facts.append(infoRow('Адрес', shortAddr(sanctionHit)))
+  facts.append(infoRow('Список', sanctionsCount() + ' адресов, на ' + SANCTIONS_DATE))
+  card.append(facts)
+  card.append(
+    el(
+      'div',
+      'hint',
+      'Если вы считаете это ошибкой — проверка идёт по официальному перечню OFAC SDN. Список вшит в страницу на дату публикации и не обновляется автоматически.'
+    )
+  )
+
+  const b = el('button', 'btn', 'Отключить кошелёк')
+  b.onclick = () => {
+    state.account = null
+    state.balances = {}
+    checkSanctions(null)
+    render()
+  }
+  card.append(b)
+
+  box.append(card)
+}

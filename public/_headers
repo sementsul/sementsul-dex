@@ -2,21 +2,79 @@
 # ВАЖНО: комментарии здесь начинаются только с '#'. Любая строка без '#'
 # внутри блока трактуется как заголовок, и файл перестаёт разбираться целиком.
 
+# Общие заголовки для всего сайта. CSP здесь СОЗНАТЕЛЬНО отсутствует:
+# см. пояснение ниже про /chain. Политика задаётся точечно по путям.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tokens.pancakeswap.finance; connect-src 'self' https://api.sementsul.net https://bscrpc.pancakeswap.finance https://bsc-dataseed.bnbchain.org https://bsc-dataseed1.defibit.io https://bsc-dataseed1.ninicoin.io https://bsc-dataseed2.defibit.io https://bsc-rpc.publicnode.com https://api.geckoterminal.com https://api.dexscreener.com; font-src 'self'; frame-src https://dexscreener.com; frame-ancestors 'none'; base-uri 'self'; form-action 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=()
   Strict-Transport-Security: max-age=31536000; includeSubDomains
 
+# --- Основное приложение ---
+#
+# Строгая политика: только свои скрипты, никакого inline. Vite собирает
+# приложение в отдельные файлы, поэтому inline ему не нужен.
+#
+# Почему CSP не на "/*". Cloudflare Pages применяет ВСЕ подходящие блоки,
+# а не только самый точный. Когда политика стояла на "/*", а для /chain
+# добавлялась своя, в ответ уходили ДВА заголовка Content-Security-Policy.
+# Браузер в таком случае выполняет все сразу, то есть действует самый
+# строгий — и встроенный скрипт страницы /chain блокировался. Диагностируется
+# только через securitypolicyviolation: в разметке никакой ошибки нет,
+# страница просто молчит. Поэтому теперь пути не пересекаются.
+/
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tokens.pancakeswap.finance; connect-src 'self' https://api.sementsul.net https://bscrpc.pancakeswap.finance https://bsc-dataseed.bnbchain.org https://bsc-dataseed.binance.org https://bsc-dataseed1.defibit.io https://bsc-dataseed1.ninicoin.io https://bsc-dataseed2.defibit.io https://bsc-rpc.publicnode.com https://1rpc.io https://bsc.drpc.org https://api.geckoterminal.com https://api.dexscreener.com; font-src 'self'; frame-src https://dexscreener.com; frame-ancestors 'none'; base-uri 'self'; form-action 'none'
+  Cache-Control: public, max-age=0, must-revalidate
+
+/index.html
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tokens.pancakeswap.finance; connect-src 'self' https://api.sementsul.net https://bscrpc.pancakeswap.finance https://bsc-dataseed.bnbchain.org https://bsc-dataseed.binance.org https://bsc-dataseed1.defibit.io https://bsc-dataseed1.ninicoin.io https://bsc-dataseed2.defibit.io https://bsc-rpc.publicnode.com https://1rpc.io https://bsc.drpc.org https://api.geckoterminal.com https://api.dexscreener.com; font-src 'self'; frame-src https://dexscreener.com; frame-ancestors 'none'; base-uri 'self'; form-action 'none'
+  Cache-Control: public, max-age=0, must-revalidate
+
 # Хешированные ассеты Vite неизменны — кешируем навсегда.
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
-# index.html не кешируем, иначе пользователи застрянут на старой версии.
-/
-  Cache-Control: public, max-age=0, must-revalidate
+# --- Страница /chain: загрузчик интерфейса из блокчейна ---
+#
+# Здесь нужны 'unsafe-inline' и для скриптов, и для стилей. Вот почему
+# это не дыра.
+#
+# Интерфейс биржи лежит в calldata транзакции и по определению состоит из
+# одного файла: у него нет возможности подгрузить ни внешний скрипт, ни
+# внешнюю таблицу стилей, иначе он перестал бы быть самодостаточным —
+# а в этом весь смысл. Его CSS приходит внутри того же HTML в теге <style>,
+# его JS — в теге <script>. Загрузчик вставляет всё это через document.write,
+# и браузер классифицирует оба как inline. Без 'unsafe-inline' в style-src
+# страница открывается голым текстом без оформления: стили молча
+# отбрасываются, ошибки в разметке нет, видно только предупреждение
+# style-src-elem в консоли. Именно это и случилось в первой версии.
+#
+# Что при этом остаётся закрытым:
+#   default-src 'none'        — никаких источников по умолчанию;
+#   connect-src               — только четыре узла BSC, больше ничего;
+#   img-src 'self' data:      — картинки только свои или встроенные;
+#   frame-ancestors 'none'    — страницу нельзя встроить в чужой iframe;
+#   base-uri 'none'           — нельзя подменить базу для относительных ссылок;
+#   form-action 'none'        — некуда отправлять формы.
+#
+# То есть страница не может никуда обратиться, кроме своего домена и этих
+# четырёх узлов. Логики биржи в загрузчике нет: он читает одну транзакцию
+# и подставляет результат.
+/chain/
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src https://bsc-dataseed.binance.org https://bsc-rpc.publicnode.com https://1rpc.io https://bsc.drpc.org; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
+  Cache-Control: no-store
 
-/index.html
-  Cache-Control: public, max-age=0, must-revalidate
+/chain/index.html
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src https://bsc-dataseed.binance.org https://bsc-rpc.publicnode.com https://1rpc.io https://bsc.drpc.org; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
+  Cache-Control: no-store
+
+# no-store, а не max-age: хеш транзакции зашит в loader.js, и после каждой
+# публикации новой версии интерфейса он меняется. С кешированием человек
+# ещё пять минут открывает старую версию и не понимает, почему изменений
+# нет. Файлы крошечные (1.3 и 4.4 KB), так что перезагрузка ничего не стоит.
+/chain/loader.js
+  Cache-Control: no-store
+
+/chain/loader.css
+  Cache-Control: no-store
