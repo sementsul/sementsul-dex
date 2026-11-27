@@ -80,21 +80,57 @@ node scripts/serve-mirror.mjs 8801
 
 ## Публикация
 
-Зеркало нужно выложить в IPFS и получить CID. Дальше два пути.
+Зеркало выложено в Pinata и раздаётся **своим воркером**:
 
-**Поддомен через шлюз.** CNAME с поддомена на конкретный CID. Работает сразу и
-не требует DNSLink.
+**https://api.sementsul.net/mirror/**
 
-**DNSLink.** `_dnslink.поддомен` с `dnslink=/ipfs/<CID>`. Гибче, но на момент
-проверки path-шлюзы (`gateway.pinata.cloud`, `ipfs.io`) отдавали на IPNS/DNSLink
-пути `403`. Поэтому для поддомена выбирать конкретный CID, а не DNSLink.
+CID: `bafybeidlqhwtm3jntjmcloewabi6cx7q3bm3lqd4wrpgjtm64h2onxnbl4`
 
-Чего делать не стоит:
+Перезаливка после правок:
 
-- `cloudflare-ipfs.com` — закрыт, Cloudflare IPFS Gateway теперь корпоративная
-  надстройка;
-- `bnb.me` — у домена только SOA, A-записи нет, шлюз мёртв;
-- `dweb.link` — отдаёт `429`, а Chrome помечает его как домен высокого риска.
+```bash
+npm run build:mirror
+PINATA_JWT=… node scripts/pin-mirror.mjs --name=sementsul-mirror-vN
+# затем обновить MIRROR_CID в worker/index.js и npx wrangler deploy
+```
+
+### Почему не публичный шлюз
+
+Проверено на живом зеркале, все варианты отпадают:
+
+| Шлюз | Результат |
+|---|---|
+| `gateway.pinata.cloud` | **403** — «HTML content cannot be served through the pinata public gateway», только платный dedicated gateway |
+| `ipfs.io` | 429 |
+| `dweb.link` | 429, плюс Chrome помечает домен как высокого риска |
+| `w3s.link`, `nftstorage.link`, `gateway.ipfs.io` | 301/302 → `ipfs.io` → 429 |
+| `cloudflare-ipfs.com` | закрыт |
+| `4everland.io` | 301 в поддомен, который не отвечает |
+| `ipfs.filebase.io` | 200, **но сломан IPv6** |
+
+Последнее особенно коварно. У `ipfs.filebase.io` есть AAAA-запись
+`2001:41d0:700:7828::1`, которая не отвечает. Chrome по умолчанию идёт по IPv6
+первым и получает `ERR_CONNECTION_CLOSED`, хотя `curl -4` отдаёт 200. Внешне
+это выглядит как «ссылка битая», а на деле виноват сломанный IPv6 у чужого
+шлюза. Проверить так:
+
+```bash
+curl -4 -o /dev/null -w '%{http_code}\n' 'https://ipfs.filebase.io/ipfs/<CID>/'   # 200
+curl -6 -o /dev/null -w '%{http_code}\n' 'https://ipfs.filebase.io/ipfs/<CID>/'   # 000
+```
+
+Поэтому зеркало раздаёт воркер на своём домене: у Cloudflare IPv4 и IPv6 в
+порядке, лимитов публичных шлюзов нет, домен наш.
+
+### DNSLink и поддомен
+
+DNSLink (`_dnslink.поддомен` с `dnslink=/ipfs/<CID>`) гибче, но на проверенных
+path-шлюзах (`gateway.pinata.cloud`, `ipfs.io`) такие пути отдавали 403. Для
+поддомена надёжнее указывать конкретный CID.
+
+Свой прокси делает поддомен ненужным: `/mirror/` живёт на уже
+сертифицированном `api.sementsul.net`. Если понадобится отдельное имя, это
+делается обычным CNAME на тот же воркер.
 
 ## Обновление
 

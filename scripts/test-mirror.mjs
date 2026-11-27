@@ -126,6 +126,31 @@ check(
   'текст плашки есть в английском словаре'
 )
 
+console.log('\n=== прокси-шлюз в воркере ===\n')
+
+// Публичные шлюзы для зеркала не годятся: Pinata отдаёт 403 на HTML, ipfs.io и
+// его зеркала — 429, у Filebase сломан IPv6 (Chrome идёт по нему первым и
+// получает ERR_CONNECTION_CLOSED). Поэтому зеркало раздаёт свой воркер.
+// Проверки ниже стерегут, чтобы этот маршрут не пропал.
+const worker = read('worker/index.js')
+
+check(
+  /MIRROR_CID\s*=\s*'bafy[a-z0-9]+'/.test(worker),
+  'в воркере закреплён CID зеркала'
+)
+check(
+  /url\.pathname\.startsWith\('\/mirror\/'\)/.test(worker),
+  'воркер обрабатывает префикс /mirror/'
+)
+check(
+  /sub\.includes\('\.\.'\)/.test(worker),
+  'прокси не выпускает за пределы каталога'
+)
+check(
+  /max-age=31536000, immutable/.test(worker),
+  'у зеркала бессрочный кеш: содержимое по CID неизменяемо'
+)
+
 console.log('\n=== документация ===\n')
 
 check(existsSync('docs/IPFS-MIRROR.md'), 'есть docs/IPFS-MIRROR.md')

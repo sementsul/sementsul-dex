@@ -89,6 +89,12 @@ export default {
     }
 
     try {
+      // Зеркало отдаётся префиксом /mirror/. Проверяем до switch: путь внутри
+      // зеркала произвольный (assets/…, sanctions/…), перечислять его нельзя.
+      if (url.pathname === '/mirror' || url.pathname.startsWith('/mirror/')) {
+        return await handleMirror(request, url)
+      }
+
       switch (url.pathname) {
         case '/api/health':
           return json({ ok: true, ts: Date.now() })
@@ -283,6 +289,74 @@ async function handleTrades(url, env) {
     .all()
 
   return json({ pair, trades: results ?? [] })
+}
+
+// ---------- шлюз для зеркала на IPFS ----------
+//
+// Отдаёт содержимое IPFS-каталога с нашего домена.
+//
+// Зачем это нужно. Публичные шлюзы для зеркала не годятся:
+//
+//   - gateway.pinata.cloud отдаёт 403 на HTML на бесплатном плане
+//     («HTML content cannot be served through the pinata public gateway»);
+//   - ipfs.io, dweb.link, w3s.link и nftstorage.link отвечают 429 либо
+//     редиректят друг на друга, замыкаясь на ipfs.io;
+//   - gateway.ipfs.io и nftstorage.link — 301/302 на ipfs.io, то есть тот же 429;
+//   - cloudflare-ipfs.com закрыт, 4everland.io редиректит в мёртвый поддомен;
+//   - ipfs.filebase.io работает, но у него СЛОМАН IPv6: AAAA-запись
+//     2001:41d0:700:7828::1 не отвечает. Chrome по умолчанию идёт по IPv6
+//     первым и получает ERR_CONNECTION_CLOSED, хотя curl с -4 отдаёт 200.
+//
+// Свой прокси решает всё сразу: домен наш, IPv4 и IPv6 у Cloudflare в порядке,
+// лимитов публичных шлюзов нет.
+//
+// Что проксируем: только чтение по конкретному CID, без записи. Кеш ставим
+// долгий — содержимое по CID неизменяемо, это адрес контента.
+const MIRROR_CID = 'bafybeidlqhwtm3jntjmcloewabi6cx7q3bm3lqd4wrpgjtm64h2onxnbl4'
+const MIRROR_UPSTREAM = `https://ipfs.filebase.io/ipfs/${MIRROR_CID}`
+
+async function handleMirror(request, url) {
+  // Путь после /mirror/ — это путь внутри IPFS-каталога.
+  let sub = url.pathname.replace(/^\/mirror\/?/, '')
+  if (sub === '') sub = 'index.html'
+
+  // Не выпускаем за пределы каталога и не даём подставить чужой CID.
+  if (sub.includes('..')) return new Response('bad path', { status: 400 })
+
+  const target = `${MIRROR_UPSTREAM}/${sub}`
+
+  const upstream = await fetch(target, {
+    method: request.method,
+    headers: { accept: request.headers.get('accept') ?? '*/*' },
+  })
+
+  if (!upstream.ok) {
+    return new Response(`upstream ${upstream.status}`, {
+      status: upstream.status === 404 ? 404 : 502,
+      headers: { 'content-type': 'text/plain; charset=utf-8' },
+    })
+  }
+
+  // Тип берём у апстрима, но HTML и JS принудительно помечаем utf-8:
+  // шлюз отдаёт text/html без кодировки, и кириллица ломалась бы.
+  const type = upstream.headers.get('content-type') ?? 'application/octet-stream'
+  const contentType = /^text\/|javascript|json/.test(type) && !/charset/i.test(type)
+    ? `${type}; charset=utf-8`
+    : type
+
+  return new Response(upstream.body, {
+    status: 200,
+    headers: {
+      'content-type': contentType,
+      // Содержимое по CID неизменяемо, поэтому кеш бессрочный.
+      'cache-control': 'public, max-age=31536000, immutable',
+      // Зеркало не должно встраиваться в чужие страницы.
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'DENY',
+      'referrer-policy': 'strict-origin-when-cross-origin',
+      'access-control-allow-origin': '*',
+    },
+  })
 }
 
 async function handleStats(url, env) {

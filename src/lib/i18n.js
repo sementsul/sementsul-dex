@@ -98,7 +98,7 @@ export const RU = {
   'compliance.sanctionsUnavailable':
     'Список санкций не загрузился, проверка адреса не выполнялась. Операции доступны; проверка по юрисдикции работает как обычно.',
   'compliance.geoUnavailable':
-    'Это зеркало без серверной части: проверка юрисдикции здесь не выполняется. Барьер по стране и региону работает только на sementsul.net.',
+    'Проверка юрисдикции на этом адресе недоступна: это зеркало. Барьер по стране и региону работает только на sementsul.net.',
   'compliance.actionsBlocked': 'Операции заблокированы',
 
   // --- экран блокировки ---
@@ -385,7 +385,7 @@ export const EN = {
   'compliance.sanctionsUnavailable':
     'The sanctions list failed to load, so the address check did not run. Transactions remain available; the jurisdiction check works as usual.',
   'compliance.geoUnavailable':
-    'This is a mirror without a server side: the jurisdiction check does not run here. The country and region barrier applies only on sementsul.net.',
+    'The jurisdiction check is not available at this address: it is a mirror. The country and region barrier applies only on sementsul.net.',
   'compliance.actionsBlocked': 'Transactions are blocked',
 
   // --- blocked screen ---

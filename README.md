@@ -276,7 +276,7 @@ V3, через них проходят обмены в обе стороны, л
 
 ```bash
 npm run compile        # solc + артефакты в src/contracts/artifacts.json
-npm test               # все наборы: 985 проверок + 75 тестов Foundry
+npm test               # все наборы: 989 проверок + 75 тестов Foundry
 npm run deploy:dry     # показать, что будет отправлено, без трат BNB
 DEPLOYER_KEY=0x... npm run deploy
 ```
