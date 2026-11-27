@@ -8,13 +8,13 @@
 
 ## Что происходит
 
-В пуле есть цикл обмена:
+В пуле есть цикл обмена (`contracts/SementsulV3.sol`, строка 638):
 
 ```solidity
 while (state.amountSpecifiedRemaining != 0 &&
-       state.sqrtPriceX96 != state.sqrtPriceLimitX96) {
+       state.sqrtPriceX96 != sqrtPriceLimitX96) {
     ...
-    state.amountSpecifiedRemaining -= int256(step.amountIn + step.feeAmount);
+    state.amountSpecifiedRemaining -= int256(step.amountIn + step.feeAmount);  // 666
     ...
 }
 ```
@@ -23,7 +23,9 @@ while (state.amountSpecifiedRemaining != 0 &&
 `amountSpecifiedRemaining` не меняется, а цена уже не может сдвинуться
 (округление `uint160`). Условие цикла остаётся истинным навсегда.
 
-Транзакция съедает весь газ и откатывается с `out of gas`.
+Защиты от нулевого прогресса в цикле **нет**: проверок `gasleft()` или
+отказа вида `NO_PROGRESS` в контракте не найдено. Транзакция съедает весь
+газ и откатывается с `out of gas`.
 
 ## Почему `amountIn` выходит нулевым
 
@@ -52,6 +54,39 @@ next = ceil(L·2^96 · sqrtP / (L·2^96 + amount·sqrtP))
 
 Зависание возникает не только на «крошечных» суммах: **1.000000000000000001
 USDT** — вполне осмысленная сумма — попадает в щель.
+
+### Почему это точно цикл, а не другая ошибка
+
+Формулировка «Transaction creation failed» сама по себе неоднозначна: так
+RPC может сообщить и о нехватке газа, и о другом сбое. Поэтому проверено
+две вещи (`scripts/prove-dust-loop.mjs`).
+
+**Первое: отказ не зависит от лимита газа.**
+
+```
+газ    300000  Transaction creation failed.
+газ   1000000  Transaction creation failed.
+газ   5000000  Transaction creation failed.
+газ  20000000  Transaction creation failed.
+```
+
+Двадцать миллионов газа — в 25 раз больше обычной транзакции — не помогают.
+Обычная ошибка (нет баланса, нет approve) от лимита не зависит так; а
+незавершающийся цикл съедает ровно столько, сколько дали.
+
+**Второе: соседние суммы на том же лимите проходят.**
+
+```
+1e18-1     дошёл до оплаты (упал на transfer from the zero address)
+1e18       дошёл до оплаты
+1e18+1     Transaction creation failed  ← только эта
+1e18+2     дошёл до оплаты
+1e18+3     дошёл до оплаты
+```
+
+Отличие ровно в один wei. Если бы дело было в балансе или approve, падали
+бы все суммы подряд. Значит причина — в самой сумме, а единственный способ
+«упасть на сумме» при исправной оплате — не сойтись в цикле.
 
 ## Как часто
 
