@@ -83,51 +83,56 @@ for (const [name, sig, expect] of selChecks) {
 
 // --- reversalPenaltyK ---
 // Возвращает uint24, viem отдаёт его как number, а не bigint.
+// С 2026-11-27 штраф включён: k = 1 000 000, то есть ставка равна сдвигу
+// цены. Документ раньше утверждал «0, выключен» — проверяем актуальное.
 const k = await client.readContract({
   address: FACTORY, abi: artifacts.SementsulV3Factory.abi, functionName: 'reversalPenaltyK', args: [500],
 }).catch(() => null)
-check('reversalPenaltyK = 0 (выключен)', Number(k) === 0, k === null ? 'функция не найдена' : String(k))
+check('reversalPenaltyK = 1 000 000 (включён)', Number(k) === 1_000_000, k === null ? 'функция не найдена' : String(k))
+
+// Потолок штрафа: 10%. Ставка не может его превысить.
+const cap = await client.readContract({
+  address: FACTORY, abi: artifacts.SementsulV3Factory.abi, functionName: 'maxReversalPenalty',
+}).catch(() => null)
+check('maxReversalPenalty = 100 000 (10%)', Number(cap) === 100_000, cap === null ? 'не найдено' : String(cap))
 
 // --- Ключ позиции: encodePacked против encode ---
 //
-// Границы диапазона берём из события Mint, а не из чисел в тексте: после
-// переезда ликвидность лежит в другом диапазоне, и жёсткие числа ломались бы
-// при каждом передеплое.
-const { encodePacked, encodeAbiParameters, parseAbiParameters } = await import('viem')
+// Здесь была ловушка, на которой проверка молча врала. Раньше границы
+// диапазона брались из события Mint через eth_getLogs. Публичные узлы ведут
+// себя непредсказуемо: bsc-dataseed отвечает "Request exceeds defined limit"
+// на любой фильтр, publicnode то игнорирует фильтр по topic0 и отдаёт все
+// логи пула, то возвращает пустой массив на окне, где события точно есть.
+// Скрипт глотал это и печатал «в пуле нет событий Mint» — ложный вывод,
+// который выглядел как факт.
+//
+// Поэтому границы берём не из логов, а из проверенной позиции на цепи:
+// диапазон -63500..-63090 открыт получателем на новом пуле. Ниже
+// проверяется, что ликвидность там действительно есть. Если пул пересоздадут
+// с другим диапазоном, проверка честно провалится, а не соврёт.
+const { encodePacked, encodeAbiParameters, parseAbiParameters, keccak256: k256b } = await import('viem')
 const owner = '0x22eA591615435a2aF0F705962f85C55FE7B4eB5C'
-const mintEvt = artifacts.SementsulV3Pool.abi.find((x) => x.type === 'event' && x.name === 'Mint')
-// Окно поиска Mint. 9000 блоков — предел одного eth_getLogs на публичном RPC,
-// но минт мог случиться раньше, поэтому идём назад окнами, пока не найдём.
-// Жёсткое одно окно ломалось через пару часов после передеплоя: пул новый,
-// а минт уже позади.
-async function findMints(address, event, args, windows = 12) {
-  const head = await client.getBlockNumber()
-  for (let w = 0; w < windows; w++) {
-    const toBlock = head - BigInt(w) * 9_000n
-    const fromBlock = toBlock - 9_000n
-    if (fromBlock < 1n) break
-    const logs = await client.getLogs({ address, event, args, fromBlock, toBlock })
-    if (logs.length) return logs
-    await new Promise((r) => setTimeout(r, 300))
-  }
-  return []
-}
+const KNOWN_LO = -63500
+const KNOWN_HI = -63090
 
-const mints = await findMints(POOL, mintEvt, { owner })
-if (mints.length === 0) throw new Error('в пуле нет событий Mint от получателя')
-const m = mints[mints.length - 1].args
-const loT = Number(m.tickLower)
-const hiT = Number(m.tickUpper)
-console.log(`  диапазон из события Mint: ${loT}..${hiT}`)
-const packed = keccak256(encodePacked(['address', 'int24', 'int24'], [owner, loT, hiT]))
-const encoded = keccak256(encodeAbiParameters(parseAbiParameters('address, int24, int24'), [owner, loT, hiT]))
-check('encodePacked != encode (ключ различается)', packed !== encoded)
+const packedKey = k256b(encodePacked(['address', 'int24', 'int24'], [owner, KNOWN_LO, KNOWN_HI]))
+const encodedKey = k256b(encodeAbiParameters(parseAbiParameters('address, int24, int24'), [owner, KNOWN_LO, KNOWN_HI]))
 
-// Ключ из encodePacked должен давать непустую позицию.
-const pos = await client.readContract({ address: POOL, abi: artifacts.SementsulV3Pool.abi, functionName: 'positions', args: [packed] })
-const posWrong = await client.readContract({ address: POOL, abi: artifacts.SementsulV3Pool.abi, functionName: 'positions', args: [encoded] })
-check('encodePacked даёт реальную позицию', pos[0] > 0n, `liquidity=${pos[0]}`)
-check('encode даёт пустую позицию', posWrong[0] === 0n, `liquidity=${posWrong[0]}`)
+const posPacked = await client.readContract({
+  address: POOL, abi: artifacts.SementsulV3Pool.abi, functionName: 'positions', args: [packedKey],
+})
+const posEncoded = await client.readContract({
+  address: POOL, abi: artifacts.SementsulV3Pool.abi, functionName: 'positions', args: [encodedKey],
+})
+
+check('ключи encodePacked и encode различаются', packedKey !== encodedKey)
+check('encodePacked находит позицию с ликвидностью', posPacked[0] > 0n, `L=${posPacked[0]}`)
+check('encode на тех же тиках даёт пусто', posEncoded[0] === 0n, `L=${posEncoded[0]}`)
+
+// Раскладка полей positions(): документ утверждает 8 полей и говорит, что
+// [0] — liquidity, [3]/[4] — tokensOwed, [5]/[6] — pending, [7] — vestBlock.
+// Если это не так, бот прочитает мусор вместо позиции.
+check('ответ positions() содержит 8 полей', posPacked.length === 8, `${posPacked.length}`)
 
 // --- Блок ~0.45 с ---
 const now = await client.getBlockNumber()
