@@ -39,7 +39,7 @@ export default function App() {
     <div className="app">
       <header className="header">
         <div className="brand">
-          <img src="/sml-256.png" alt="Sementsul" onError={(e) => (e.currentTarget.style.display = 'none')} />
+          <img src={`${import.meta.env.BASE_URL}sml-256.png`} alt="Sementsul" onError={(e) => (e.currentTarget.style.display = 'none')} />
           <span>Sementsul</span>
           <span className="brand-sub">DEX</span>
         </div>
@@ -127,6 +127,18 @@ export default function App() {
       {compliance.sanctionsUnavailable && !compliance.addressBlocked && (
         <div className="compliance-banner warn" role="status">
           {t('compliance.sanctionsUnavailable')}
+        </div>
+      )}
+
+      {/* Проверка юрисдикции не выполнялась.
+          Это состояние IPFS-зеркала: там нет Cloudflare Pages Functions, а
+          значит и /api/geo. Раньше в этом случае проверка молча считалась
+          пройденной, и посетитель из закрытой юрисдикции видел обычный
+          интерфейс. Теперь говорим прямо: барьер на этом адресе не работает,
+          и для операций есть основной сайт. */}
+      {compliance.geoUnavailable && (
+        <div className="compliance-banner warn" role="status">
+          {t('compliance.geoUnavailable')}
         </div>
       )}
 

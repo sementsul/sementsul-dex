@@ -11,25 +11,42 @@ import {
   loadSanctions,
 } from '../lib/compliance.js'
 
-/// Опрашивает /api/geo. В локальной разработке без wrangler страница отдаётся
-/// Vite, эндпоинта нет — тогда geo остаётся null и проверка не блокирует.
+/// Опрашивает гео-эндпоинт.
+///
+/// Возвращает объект с полем status:
+///   'ok'          — страна получена, можно судить о блокировке;
+///   'unavailable' — эндпоинта нет или он не ответил (IPFS-зеркало, локальная
+///                   разработка без wrangler, сбой сети).
+///
+/// Различать эти два случая обязательно. Раньше при любой ошибке возвращался
+/// просто null, evaluateGeo(null) давал «не заблокировано», и на IPFS-зеркале
+/// санкционный барьер тихо исчезал: посетитель из США видел рабочий интерфейс
+/// без единого упоминания, что проверка не проводилась.
+///
+/// Теперь отсутствие проверки — отдельное состояние, и интерфейс говорит о нём
+/// прямо (см. geoUnavailable в возвращаемом объекте).
 async function fetchGeo() {
   try {
     const res = await fetch('/api/geo', { cache: 'no-store' })
-    if (!res.ok) return null
+    if (!res.ok) return { status: 'unavailable' }
     const data = await res.json()
     // Защита от SPA-фолбэка: при отсутствии функции Pages отдаст index.html
     // со статусом 200, и json() упадёт — это нормально, ловим.
-    if (!data || typeof data !== 'object' || !('country' in data)) return null
-    return data
+    if (!data || typeof data !== 'object' || !('country' in data)) {
+      return { status: 'unavailable' }
+    }
+    return { status: 'ok', geo: data }
   } catch {
-    return null
+    return { status: 'unavailable' }
   }
 }
 
 export function useCompliance(account, t = null) {
   const [geo, setGeo] = useState(null)
   const [geoLoaded, setGeoLoaded] = useState(false)
+  // Отдельное состояние: проверка не выполнена. Именно оно отличает зеркало
+  // от «проверили и пропустили».
+  const [geoUnavailable, setGeoUnavailable] = useState(false)
   const [addressCheck, setAddressCheck] = useState({
     status: 'idle', // idle | checking | ok | listed | error
     entry: null,
@@ -39,9 +56,10 @@ export function useCompliance(account, t = null) {
   // ---------- геолокация ----------
   useEffect(() => {
     let alive = true
-    fetchGeo().then((g) => {
+    fetchGeo().then((r) => {
       if (!alive) return
-      setGeo(g)
+      setGeo(r.status === 'ok' ? r.geo : null)
+      setGeoUnavailable(r.status === 'unavailable')
       setGeoLoaded(true)
     })
     return () => {
@@ -117,6 +135,9 @@ export function useCompliance(account, t = null) {
   return {
     geo,
     geoLoaded,
+    // Проверка юрисдикции не выполнялась (IPFS-зеркало или сбой эндпоинта).
+    // Интерфейс обязан сказать об этом, а не делать вид, что всё проверено.
+    geoUnavailable,
     geoBlocked: geoDecision.blocked,
     geoKind: geoDecision.kind,
     geoTitle: geoDecision.title,

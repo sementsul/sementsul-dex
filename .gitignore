@@ -3,6 +3,9 @@ node_modules/
 
 # Сборка фронтенда
 dist/
+# Отдельная сборка для IPFS-зеркала: собирается из тех же исходников, в
+# репозитории не нужна (см. docs/IPFS-MIRROR.md).
+dist-mirror/
 
 # Сборка Foundry
 foundry-out/

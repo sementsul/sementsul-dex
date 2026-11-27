@@ -190,6 +190,20 @@ function fallbackGeoText(key, params) {
 /// поэтому одного запроса за сессию достаточно.
 let sanctionsPromise = null
 
+/// Путь к файлу со списком.
+///
+/// Через BASE_URL, а не жёстким '/sanctions/…': на IPFS-зеркале сайт лежит не
+/// в корне домена, и абсолютный путь уходил бы в никуда. Тогда список не
+/// загружался бы, проверка адреса молча возвращала бы unavailable, и на зеркале
+/// OFAC-скрининг просто переставал бы работать. При обычной сборке BASE_URL
+/// равен '/', поэтому для Cloudflare Pages путь не меняется.
+///
+/// Обращение к import.meta.env защищено через ?.: этот модуль импортируют и
+/// тесты, которые гоняются в обычном Node без Vite. Там import.meta.env нет, и
+/// без проверки падал бы весь набор комплаенса — при полностью живом коде.
+const BASE = import.meta.env?.BASE_URL ?? '/'
+export const SANCTIONS_URL = `${BASE}sanctions/ofac-addresses.json`
+
 /// Загружает список. Возвращает { set: Set<address>, meta } или null при сбое.
 ///
 /// Сбой загрузки НЕ блокирует сайт: если файл не отдался, проверка адреса
@@ -201,7 +215,7 @@ export function loadSanctions() {
 
   sanctionsPromise = (async () => {
     try {
-      const res = await fetch('/sanctions/ofac-addresses.json', { cache: 'no-cache' })
+      const res = await fetch(SANCTIONS_URL, { cache: 'no-cache' })
       if (!res.ok) return null
       const data = await res.json()
       const addresses = data?.addresses ?? {}
