@@ -783,7 +783,10 @@ a:hover {
 
 .trade-row {
   display: grid;
-  grid-template-columns: 74px 1fr auto;
+  /* Направление, сумма сделки, цена исполнения, время. Раньше колонок было
+     три: сумма отсутствовала, и её место занимала цена, подписанная «USDT» —
+     из-за этого сделки по 4 USDT читались как сделки на 563 USDT. */
+  grid-template-columns: 74px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
   padding: 8px 0;
@@ -818,9 +821,20 @@ a:hover {
   color: var(--green);
 }
 
-.trade-price {
+.trade-amount {
   font-size: 13px;
   color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Цена исполнения — второстепенная: она одинакова у всех строк подряд, а
+   различаются строки как раз суммой. Поэтому приглушаем её. */
+.trade-price {
+  font-size: 12px;
+  color: var(--text-faint);
+  white-space: nowrap;
 }
 
 .trade-time {
@@ -1736,6 +1750,21 @@ a:hover {
   .pool-row {
     grid-template-columns: 1fr auto;
     gap: 6px 12px;
+  }
+
+  /* Строка сделки на узком экране.
+     Четыре колонки в 300px не помещаются, и сумма обрезалась до «4.50…» —
+     то есть ровно та цифра, ради которой всё и переделывалось. Убираем цену
+     исполнения: у соседних строк она почти одинаковая, а сумма у каждой своя.
+     На экранах пошире цена остаётся. */
+  .trade-row {
+    grid-template-columns: 62px minmax(0, 1fr) auto;
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  .trade-price {
+    display: none;
   }
 
   .nav-tab {

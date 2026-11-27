@@ -276,7 +276,7 @@ V3, через них проходят обмены в обе стороны, л
 
 ```bash
 npm run compile        # solc + артефакты в src/contracts/artifacts.json
-npm test               # все наборы: 992 проверки + 75 тестов Foundry
+npm test               # все наборы: 1018 проверок + 75 тестов Foundry
 npm run deploy:dry     # показать, что будет отправлено, без трат BNB
 DEPLOYER_KEY=0x... npm run deploy
 ```
@@ -314,6 +314,7 @@ npm run test:catch     # проверить, что тесты ловят пол
 | `test-deploy-signing.mjs` | подпись через viem, кодирование аргументов |
 | `test-gas.mjs` | потолок газа RPC: 2^24 на транзакцию |
 | `test-swap-parsing.mjs` | разбор Swap-событий и агрегация свечей |
+| `test-trade-row.mjs` | строка сделки: сумма в USDT и цена исполнения |
 | `test-d1-budget.mjs` | бюджет D1: нет N+1 в свечах, регистр `pair`, целочисленный бакет, кеш |
 | `test-withdraw.mjs` | `withdraw.mjs`: защита от молчаливых ошибок и лишних отправок |
 | `test-compliance.mjs` | геоблокировка, регионы Украины, целостность санкционного списка |

@@ -346,6 +346,8 @@ export const RU = {
   'trades.minAgo': '{n} мин назад',
   'trades.hourAgo': '{n} ч назад',
   'trades.dayAgo': '{n} дн назад',
+  'trades.tipBuy': 'Куплено {wbnb} WBNB за {usdt} USDT',
+  'trades.tipSell': 'Продано {wbnb} WBNB за {usdt} USDT',
 
   // --- длительность ---
   'dur.sec': '{n} сек',
@@ -632,6 +634,8 @@ export const EN = {
   'trades.minAgo': '{n} min ago',
   'trades.hourAgo': '{n} h ago',
   'trades.dayAgo': '{n} d ago',
+  'trades.tipBuy': 'Bought {wbnb} WBNB for {usdt} USDT',
+  'trades.tipSell': 'Sold {wbnb} WBNB for {usdt} USDT',
 
   // --- duration ---
   'dur.sec': '{n} s',
