@@ -24,7 +24,13 @@ async function apiFetch(path) {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS)
   try {
-    const res = await fetch(API_BASE + path, { signal: ctrl.signal })
+    // cache: 'no-store' — не отдавать ответ из HTTP-кеша браузера.
+    //
+    // Без этого «Последние сделки» показывали данные 19-часовой давности,
+    // хотя API отдавал свежие: браузер держал ответ по Cache-Control. Здесь
+    // история меняется постоянно, и любой кеш на стороне клиента — это
+    // устаревшая информация на экране. Кешировать должен только воркер.
+    const res = await fetch(API_BASE + path, { signal: ctrl.signal, cache: 'no-store' })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return await res.json()
   } finally {

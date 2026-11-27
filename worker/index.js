@@ -167,18 +167,24 @@ async function cached(request, env, ctx, pathname, handler) {
   // Ошибки не кешируем: иначе исчерпанный лимит D1 «залипнет» на TTL.
   if (!cache || !key || !res.ok) return res
 
-  // Заголовки ставим на ТОТ ЖЕ ответ, который уходит клиенту, а не только на
-  // копию для кеша.
+  // Кешируем на ГРАНИЦЕ, но не в браузере.
   //
-  // Это была настоящая ошибка: раньше cache-control выставлялся лишь на
-  // `toCache`, а клиенту возвращался `res` без него. Cloudflare, не увидев
-  // Cache-Control от воркера, подставлял значение зоны browser_cache_ttl
-  // (14400 секунд), и ответы жили в браузере 4 часа вместо 30 секунд.
+  // max-age=0 + must-revalidate: браузер обязан переспросить при каждом
+  // обращении, поэтому данные не застревают у пользователя. s-maxage держит
+  // ответ на границе Cloudflare — там кеш и нужен, он снимает нагрузку с D1.
   //
-  // s-maxage управляет кешем на границе, max-age — браузером. Держим их
-  // равными: данные индексатора обновляются не чаще, чем раз в несколько
-  // минут, и более долгий браузерный кеш только показывал бы устаревшее.
-  res.headers.set('cache-control', `public, max-age=${ttl}, s-maxage=${ttl}`)
+  // Раньше здесь стояло `max-age=${ttl}` и это уже приводило к поломке: в
+  // интерфейсе висели сделки 19-часовой давности, хотя API отдавал свежие.
+  // Проверялось так: обычный fetch возвращал 1140 минут, а тот же запрос с
+  // случайным параметром — 17 минут. Разница только в HTTP-кеше браузера.
+  //
+  // Ещё раньше заголовок ставился лишь на копию для кеша, а клиенту уходил
+  // ответ без него — тогда Cloudflare подставлял browser_cache_ttl зоны
+  // (14400 секунд), и ситуация была ещё хуже.
+  res.headers.set(
+    'cache-control',
+    `public, max-age=0, s-maxage=${ttl}, must-revalidate`
+  )
   res.headers.set('x-cache', 'MISS')
 
   // В кеш кладём отдельную копию: тело ответа уже отдаётся клиенту.
@@ -312,7 +318,7 @@ async function handleTrades(url, env) {
 //
 // Что проксируем: только чтение по конкретному CID, без записи. Кеш ставим
 // долгий — содержимое по CID неизменяемо, это адрес контента.
-const MIRROR_CID = 'bafybeidlqhwtm3jntjmcloewabi6cx7q3bm3lqd4wrpgjtm64h2onxnbl4'
+const MIRROR_CID = 'bafybeid6h7qzuvu2rkdmt7wrfyelpx7l2tz2mlq7x7e5z65pixmjgv7ycq'
 const MIRROR_UPSTREAM = `https://ipfs.filebase.io/ipfs/${MIRROR_CID}`
 
 async function handleMirror(request, url) {

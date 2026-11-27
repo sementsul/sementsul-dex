@@ -276,7 +276,7 @@ V3, через них проходят обмены в обе стороны, л
 
 ```bash
 npm run compile        # solc + артефакты в src/contracts/artifacts.json
-npm test               # все наборы: 989 проверок + 75 тестов Foundry
+npm test               # все наборы: 992 проверки + 75 тестов Foundry
 npm run deploy:dry     # показать, что будет отправлено, без трат BNB
 DEPLOYER_KEY=0x... npm run deploy
 ```
@@ -442,6 +442,32 @@ npx wrangler deploy
 
 ```bash
 npx wrangler d1 execute sementsul-dex --file=worker/migrate-lowercase-pair.sql --remote
+```
+
+### Запуск индексатора
+
+```bash
+CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… node scripts/index.mjs
+```
+
+**Расписания нет.** `scripts/index.mjs` не привязан к cron и не запускается из
+GitHub Actions — это ручной запуск. Отсюда следствие, на которое легко
+наткнуться: если не запускать, «Последние сделки» показывают вчерашний день и
+выглядят как зависший интерфейс. Именно так и случилось: данные отставали на
+19 часов и 149 670 блоков, хотя и API, и вёрстка были исправны.
+
+Проверить отставание:
+
+```bash
+curl -s 'https://api.sementsul.net/api/stats?pair=0x37c7702b589c69d1e4f4ad32e19f372ed6780278' \
+  | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log("блок:",j.indexedToBlock,"обновлён:",new Date(j.indexedAt*1000).toISOString())})'
+```
+
+Догнать накопленное за один прогон можно через `MAX_BLOCKS` (по умолчанию
+40 000, это около 5 часов сети):
+
+```bash
+MAX_BLOCKS=150000 DAYS=3 node scripts/index.mjs
 ```
 
 Эндпоинты:
