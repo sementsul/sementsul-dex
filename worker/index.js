@@ -318,7 +318,7 @@ async function handleTrades(url, env) {
 //
 // Что проксируем: только чтение по конкретному CID, без записи. Кеш ставим
 // долгий — содержимое по CID неизменяемо, это адрес контента.
-const MIRROR_CID = 'bafybeid6h7qzuvu2rkdmt7wrfyelpx7l2tz2mlq7x7e5z65pixmjgv7ycq'
+const MIRROR_CID = 'bafybeiedhl6nv5cbdwzatvdgql7so66y6giziqnzt7da5ydr2kq62f2htu'
 const MIRROR_UPSTREAM = `https://ipfs.filebase.io/ipfs/${MIRROR_CID}`
 
 async function handleMirror(request, url) {
